@@ -13,6 +13,21 @@ struct FileEntry {
     is_directory: bool,
 }
 
+#[tauri::command]
+fn get_all_drives() -> Vec<String> {
+    #[cfg(target_os = "windows")]
+    {
+        (b'A'..=b'Z')
+            .map(|c| format!("{}:\\", c as char))
+            .filter(|drive| PathBuf::from(drive).exists())
+            .collect()
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        vec!["/".to_string()]
+    }
+}
+
 /// Returns the user's home directory as a string.
 #[tauri::command]
 fn get_home_dir() -> Option<String> {
@@ -41,7 +56,7 @@ fn read_folder(dir: String) -> Vec<FileEntry> {
                 // Only include images
                 if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
                     let ext = ext.to_lowercase();
-                    if matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "tiff" | "avif" | "heic") {
+                    if matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "gif" | "bmp" | "webp" | "tiff" | "svg" | "avif" | "heic" | "mp4" | "webm" | "ogg" | "mov" | "avi" | "mkv" | "mp3" | "wav" | "flac" | "aac") {
                         result.push(FileEntry {
                             name,
                             path: path.to_string_lossy().to_string(),
@@ -85,7 +100,7 @@ fn delete_file(path: String) -> Result<(), String> {
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![get_home_dir, read_folder, read_image_as_data_url, delete_file])
+        .invoke_handler(tauri::generate_handler![get_all_drives, get_home_dir, read_folder, read_image_as_data_url, delete_file])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
