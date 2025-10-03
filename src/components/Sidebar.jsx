@@ -16,6 +16,7 @@ const Sidebar = () => {
 		setSelectedMedia,
 		selectedMediaFilename,
 		setSelectedMediaFilename,
+		setInfoBox,
 		IMAGE_TYPES,
 		AUDIO_TYPES,
 		VIDEO_TYPES,
@@ -37,9 +38,10 @@ const Sidebar = () => {
 	}, [setDrives]);
 
 	const openDir = async (dir, type) => {
+		setCurrentDir(dir);
 		setSelectedMedia(null);
 		setSelectedMediaFilename({ name: "", path: "", type: "", index: 0 });
-		setCurrentDir(dir);
+		setInfoBox({ visible: false, content: "" });
 		if (currentDir && type !== "drives") {
 			setPrevDir([...prevDir, currentDir]);
 			setNextDir([]); // reset forward history
@@ -54,6 +56,7 @@ const Sidebar = () => {
 		setPrevDir(prevDir.slice(0, -1)); // Pop from prev
 		setSelectedMedia(null);
 		setSelectedMediaFilename({ name: "", path: "", type: "", index: 0 });
+		setInfoBox({ visible: false, content: "" });
 	};
 
 	const goToNextDir = async () => {
@@ -64,6 +67,7 @@ const Sidebar = () => {
 		setNextDir(nextDir.slice(1)); // Pop from next
 		setSelectedMedia(null);
 		setSelectedMediaFilename({ name: "", path: "", type: "", index: 0 });
+		setInfoBox({ visible: false, content: "" });
 	};
 
 	const getFileExtension = (filename) => {
@@ -73,6 +77,8 @@ const Sidebar = () => {
 
 	const handleKeyDown = (e) => {
 		if (!currentFiles.length) return;
+
+		setInfoBox({ visible: false, content: "" });
 
 		const idx = selectedMediaFilename.index ?? 0;
 
@@ -223,6 +229,7 @@ const Sidebar = () => {
 										: "text-slate-700 hover:bg-slate-200"
 								}`}
 									onClick={() => {
+										setInfoBox({ visible: false, content: "" });
 										if (f.is_directory) {
 											openDir(f.path);
 										} else {
