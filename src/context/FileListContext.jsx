@@ -14,6 +14,7 @@ export function FileListProvider({ children }) {
 		type: "",
 		index: 0,
 	});
+	const [infoBox, setInfoBox] = useState({ visible: false, content: "" });
 
 	const IMAGE_TYPES = [
 		"jpg",
@@ -45,6 +46,8 @@ export function FileListProvider({ children }) {
 				setSelectedMedia,
 				selectedMediaFilename,
 				setSelectedMediaFilename,
+				infoBox,
+				setInfoBox,
 				IMAGE_TYPES,
 				AUDIO_TYPES,
 				VIDEO_TYPES,
