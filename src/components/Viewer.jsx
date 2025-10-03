@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
 import { useFileList } from "../context/FileListContext";
 
 import Options from "./Options";
 
 export default function Viewer() {
-	const { selectedImage, imgSrc, setImgSrc } = useFileList();
+	const {
+		selectedMedia,
+		selectedMediaFilename,
+		IMAGE_TYPES,
+		AUDIO_TYPES,
+		VIDEO_TYPES,
+	} = useFileList();
 
 	const [zoom, setZoom] = useState(1);
 	const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -14,19 +19,11 @@ export default function Viewer() {
 	const containerRef = useRef();
 
 	useEffect(() => {
-		(async () => {
+		if (selectedMedia) {
 			setZoom(1);
 			setOffset({ x: 0, y: 0 });
-			if (selectedImage) {
-				const b64 = await invoke("read_image_as_data_url", {
-					path: selectedImage,
-				});
-				setImgSrc(b64);
-			} else {
-				setImgSrc(null);
-			}
-		})();
-	}, [selectedImage, setImgSrc]);
+		}
+	}, [selectedMedia]);
 
 	const handleWheel = (e) => {
 		if (e.deltaY < 0) {
@@ -37,7 +34,7 @@ export default function Viewer() {
 	};
 
 	const handleMouseDown = (e) => {
-		if (!imgSrc) return;
+		if (!selectedMedia) return;
 		setDragging(true);
 		setStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
 	};
@@ -62,13 +59,13 @@ export default function Viewer() {
 			onMouseMove={handleMouseMove}
 			onMouseUp={handleMouseUp}
 			onMouseLeave={handleMouseLeave}
-			aria-label="Image viewer"
+			aria-label="Media viewer"
 		>
-			<Options />
-			{imgSrc ? (
+			{selectedMedia && <Options />}
+			{IMAGE_TYPES.includes(selectedMediaFilename?.type) && (
 				<img
-					src={imgSrc}
-					alt="selected"
+					src={selectedMedia}
+					alt={selectedMediaFilename.name}
 					draggable={false}
 					className="transition-transform duration-75"
 					style={{
@@ -77,9 +74,24 @@ export default function Viewer() {
 						userSelect: "none",
 					}}
 				/>
-			) : (
-				<span className="text-white">Select an image...</span>
 			)}
+			{[...AUDIO_TYPES, ...VIDEO_TYPES].includes(
+				selectedMediaFilename?.type,
+			) && (
+				<div className="flex flex-col items-center">
+					{/** biome-ignore lint/a11y/useMediaCaption: <explanation> */}
+					<video
+						src={selectedMedia}
+						controls
+						className="max-w-full max-h-full mb-4"
+						title={selectedMediaFilename.file}
+						preload="metadata"
+						autoPlay
+						loop
+					/>
+				</div>
+			)}
+			{!selectedMedia && <span className="text-white">Select media...</span>}
 		</section>
 	);
 }
