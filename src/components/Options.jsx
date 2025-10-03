@@ -1,48 +1,53 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useFileList } from "../context/FileListContext";
+import useFolder from "../hooks/useFolder";
 
 export default function Options() {
-	const { setCurrentFiles, currentDir, selectedImage, imgSrc, setImgSrc } =
-		useFileList();
+	const {
+		currentDir,
+		selectedMedia,
+		setSelectedMedia,
+		selectedMediaFilename,
+		setSelectedMediaFilename,
+		IMAGE_TYPES,
+	} = useFileList();
+
+	const { mutate } = useFolder(currentDir, 5000);
 
 	const handleDelete = async () => {
-		if (selectedImage) {
-			setImgSrc(null);
-			await invoke("delete_file", { path: selectedImage });
-			const folder = await invoke("read_folder", { dir: currentDir });
-			setCurrentFiles(folder);
+		if (selectedMedia) {
+			setSelectedMedia(null);
+			await invoke("delete_file", { path: selectedMediaFilename.path });
+			setSelectedMediaFilename({ name: "", path: "", type: "", index: 0 });
+			mutate();
 		}
 	};
 
 	const handleInfo = () => {
-		if (!selectedImage) {
+		if (!selectedMedia) {
 			alert("No image loaded.");
 			return;
 		}
 
-		// Extract base64 info
-		const match = imgSrc.match(/^data:(image\/[\w+]+);base64,(.*)$/);
-		if (!match) {
-			alert("Invalid image data.");
+		if (!IMAGE_TYPES.includes(selectedMediaFilename.type.toLowerCase())) {
+			alert("Info is only available for image files.");
 			return;
 		}
-		const mime = match[1];
-		const b64 = match[2];
-		const sizeKB = (b64.length * 3) / 4 / 1024;
 
-		// Create an image to get dimensions
 		const img = new window.Image();
 		img.onload = () => {
 			alert(
-				`Type: ${mime}\nSize: ${sizeKB.toFixed(1)} KB\nDimensions: ${img.width} x ${img.height}`,
+				`File: ${selectedMediaFilename.name}\nDimensions: ${img.width} x ${img.height}\nType: ${img.src
+					.split(".")
+					.pop()
+					.toUpperCase()}`,
 			);
 		};
-		img.onerror = () => {
-			alert(
-				`Type: ${mime}\nSize: ${sizeKB.toFixed(1)} KB\nDimensions: Unknown`,
-			);
+		img.onerror = (err) => {
+			console.error("Image load error:", err);
+			alert("Failed to load image info.");
 		};
-		img.src = imgSrc;
+		img.src = selectedMedia;
 	};
 
 	return (
@@ -50,12 +55,12 @@ export default function Options() {
 			<button
 				type="button"
 				className={`rounded px-2 py-1 transition-colors ${
-					imgSrc === null
+					selectedMedia === null
 						? "bg-gray-400 text-gray-200 cursor-not-allowed"
 						: "text-white hover:bg-red-600 bg-red-500"
 				}`}
 				title="Delete"
-				disabled={imgSrc === null}
+				disabled={selectedMedia === null}
 				onClick={handleDelete}
 			>
 				🗑️
@@ -63,12 +68,16 @@ export default function Options() {
 			<button
 				type="button"
 				className={`rounded px-2 py-1 transition-colors ${
-					imgSrc === null
+					selectedMedia === null ||
+					!IMAGE_TYPES.includes(selectedMediaFilename.type.toLowerCase())
 						? "bg-gray-400 text-gray-200 cursor-not-allowed"
 						: "text-white hover:bg-blue-600 bg-blue-500"
 				}`}
-				title="Info"
-				disabled={imgSrc === null}
+				title="Info (only for images)"
+				disabled={
+					selectedMedia === null ||
+					!IMAGE_TYPES.includes(selectedMediaFilename.type.toLowerCase())
+				}
 				onClick={handleInfo}
 			>
 				ℹ️
