@@ -1,3 +1,4 @@
+import { useState, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { useFileList } from "../context/FileListContext";
 import useFolder from "../hooks/useFolder";
@@ -9,10 +10,13 @@ export default function Options() {
 		setSelectedMedia,
 		selectedMediaFilename,
 		setSelectedMediaFilename,
+		infoBox,
+		setInfoBox,
 		IMAGE_TYPES,
 	} = useFileList();
 
 	const { mutate } = useFolder(currentDir, 5000);
+	const infoBtnRef = useRef(null);
 
 	const handleDelete = async () => {
 		if (selectedMedia) {
@@ -24,31 +28,30 @@ export default function Options() {
 	};
 
 	const handleInfo = () => {
-		if (!selectedMedia) {
-			alert("No image loaded.");
-			return;
-		}
-
-		if (!IMAGE_TYPES.includes(selectedMediaFilename.type.toLowerCase())) {
-			alert("Info is only available for image files.");
+		if (!selectedMedia) return;
+		if (!IMAGE_TYPES.includes(selectedMediaFilename.type.toLowerCase())) return;
+		if (infoBox.visible) {
+			setInfoBox({ visible: false, content: "" });
 			return;
 		}
 
 		const img = new window.Image();
 		img.onload = () => {
-			alert(
-				`File: ${selectedMediaFilename.name}\nDimensions: ${img.width} x ${img.height}\nType: ${img.src
+			setInfoBox({
+				visible: true,
+				content: `File: ${selectedMediaFilename.name}\nDimensions: ${img.width} x ${img.height}\nType: ${img.src
 					.split(".")
 					.pop()
 					.toUpperCase()}`,
-			);
+			});
 		};
-		img.onerror = (err) => {
-			console.error("Image load error:", err);
-			alert("Failed to load image info.");
+		img.onerror = () => {
+			setInfoBox({ visible: true, content: "Failed to load image info." });
 		};
 		img.src = selectedMedia;
 	};
+
+	const handleCloseInfo = () => setInfoBox({ visible: false, content: "" });
 
 	return (
 		<div className="absolute top-2 right-2 z-20 flex gap-2 bg-black/60 rounded p-1 shadow-lg">
@@ -65,23 +68,42 @@ export default function Options() {
 			>
 				🗑️
 			</button>
-			<button
-				type="button"
-				className={`rounded px-2 py-1 transition-colors ${
-					selectedMedia === null ||
-					!IMAGE_TYPES.includes(selectedMediaFilename.type.toLowerCase())
-						? "bg-gray-400 text-gray-200 cursor-not-allowed"
-						: "text-white hover:bg-blue-600 bg-blue-500"
-				}`}
-				title="Info (only for images)"
-				disabled={
-					selectedMedia === null ||
-					!IMAGE_TYPES.includes(selectedMediaFilename.type.toLowerCase())
-				}
-				onClick={handleInfo}
-			>
-				ℹ️
-			</button>
+			<div className="relative" style={{ display: "inline-block" }}>
+				<button
+					type="button"
+					ref={infoBtnRef}
+					className={`rounded px-2 py-1 transition-colors ${
+						selectedMedia === null ||
+						!IMAGE_TYPES.includes(selectedMediaFilename.type.toLowerCase())
+							? "bg-gray-400 text-gray-200 cursor-not-allowed"
+							: "text-white hover:bg-blue-600 bg-blue-500"
+					}`}
+					title="Info (only for images)"
+					disabled={
+						selectedMedia === null ||
+						!IMAGE_TYPES.includes(selectedMediaFilename.type.toLowerCase())
+					}
+					onClick={handleInfo}
+				>
+					ℹ️
+				</button>
+				{infoBox.visible && (
+					<div
+						className="absolute right-0 mt-2 min-w-[180px] bg-white text-black text-xs rounded shadow-lg p-2 border border-gray-300 whitespace-pre z-50"
+						style={{ top: "100%" }}
+					>
+						<button
+							type="button"
+							onClick={handleCloseInfo}
+							className="absolute top-1 right-1 text-gray-400 hover:text-gray-700 text-xs"
+							title="Close"
+						>
+							×
+						</button>
+						{infoBox.content}
+					</div>
+				)}
+			</div>
 		</div>
 	);
 }
