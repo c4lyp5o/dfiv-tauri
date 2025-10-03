@@ -3,28 +3,51 @@ import { createContext, useContext, useState } from "react";
 const FileListContext = createContext();
 
 export function FileListProvider({ children }) {
-	const [currentFiles, setCurrentFiles] = useState([]);
+	const [drives, setDrives] = useState({ allDrives: [], currentDrive: "" });
 	const [currentDir, setCurrentDir] = useState("");
 	const [prevDir, setPrevDir] = useState([]);
-	const [selectedIdx, setSelectedIdx] = useState(0);
-	const [selectedImage, setSelectedImage] = useState("");
-	const [imgSrc, setImgSrc] = useState(null);
+	const [nextDir, setNextDir] = useState([]);
+	const [selectedMedia, setSelectedMedia] = useState(null);
+	const [selectedMediaFilename, setSelectedMediaFilename] = useState({
+		name: "",
+		path: "",
+		type: "",
+		index: 0,
+	});
+
+	const IMAGE_TYPES = [
+		"jpg",
+		"jpeg",
+		"png",
+		"gif",
+		"bmp",
+		"webp",
+		"tiff",
+		"svg",
+		"avif",
+		"heic",
+	];
+	const AUDIO_TYPES = ["mp3", "wav", "ogg", "flac", "aac"];
+	const VIDEO_TYPES = ["mp4", "webm", "mov", "avi", "mkv"];
 
 	return (
 		<FileListContext.Provider
 			value={{
-				currentFiles,
-				setCurrentFiles,
+				drives,
+				setDrives,
 				currentDir,
 				setCurrentDir,
 				prevDir,
 				setPrevDir,
-				selectedIdx,
-				setSelectedIdx,
-				selectedImage,
-				setSelectedImage,
-				imgSrc,
-				setImgSrc,
+				nextDir,
+				setNextDir,
+				selectedMedia,
+				setSelectedMedia,
+				selectedMediaFilename,
+				setSelectedMediaFilename,
+				IMAGE_TYPES,
+				AUDIO_TYPES,
+				VIDEO_TYPES,
 			}}
 		>
 			{children}
