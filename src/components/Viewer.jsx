@@ -79,7 +79,7 @@ export default function Viewer() {
 				selectedMediaFilename?.type,
 			) && (
 				<div className="flex flex-col items-center">
-					{/** biome-ignore lint/a11y/useMediaCaption: <explanation> */}
+					{/** biome-ignore lint/a11y/useMediaCaption: false */}
 					<video
 						src={selectedMedia}
 						controls
