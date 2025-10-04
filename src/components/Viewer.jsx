@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useFileList } from "../context/FileListContext";
 
-import Options from "./Options";
+import Options from "./FileExplorer/Options";
 
 export default function Viewer() {
 	const {
