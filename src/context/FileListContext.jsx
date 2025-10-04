@@ -1,8 +1,10 @@
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useState, useEffect } from "react";
+import Database from "@tauri-apps/plugin-sql";
 
 const FileListContext = createContext();
 
 export function FileListProvider({ children }) {
+	const [appMode, setAppMode] = useState("explorer");
 	const [drives, setDrives] = useState({ allDrives: [], currentDrive: "" });
 	const [currentDir, setCurrentDir] = useState("");
 	const [prevDir, setPrevDir] = useState([]);
@@ -15,6 +17,21 @@ export function FileListProvider({ children }) {
 		index: 0,
 	});
 	const [infoBox, setInfoBox] = useState({ visible: false, content: "" });
+	const [contextMenu, setContextMenu] = useState({ x: 0, y: 0, file: null });
+	const [database, setDatabase] = useState(null);
+
+	const getFileExtension = (filename) => {
+		const parts = filename.split(".");
+		return parts.length > 1 ? parts.pop().toLowerCase() : "";
+	};
+
+	useEffect(() => {
+		const loadDb = async () => {
+			const db = await Database.load("sqlite:dfiv.db");
+			setDatabase(db);
+		};
+		loadDb();
+	}, []);
 
 	const IMAGE_TYPES = [
 		"jpg",
@@ -34,6 +51,8 @@ export function FileListProvider({ children }) {
 	return (
 		<FileListContext.Provider
 			value={{
+				appMode,
+				setAppMode,
 				drives,
 				setDrives,
 				currentDir,
@@ -48,6 +67,10 @@ export function FileListProvider({ children }) {
 				setSelectedMediaFilename,
 				infoBox,
 				setInfoBox,
+				contextMenu,
+				setContextMenu,
+				getFileExtension,
+				database,
 				IMAGE_TYPES,
 				AUDIO_TYPES,
 				VIDEO_TYPES,
