@@ -1,8 +1,8 @@
 [package]
-name = "dfiv-tauri"
+name = "dfmv-tauri"
 version = "1.0.0"
-description = "Image Viewer built with Tauri and React"
-authors = ["you"]
+description = "Media Viewer built with Tauri and React"
+authors = ["c4lyp5o"]
 edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -18,9 +18,6 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-anyhow = "1.0.100"
-base64 = "0.22.1"
-dirs = "6.0.0"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite", "chrono"] }

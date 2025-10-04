@@ -756,12 +756,9 @@ dependencies = [
 ]
 
 [[package]]
-name = "dfiv-tauri"
+name = "dfmv-tauri"
 version = "1.0.0"
 dependencies = [
- "anyhow",
- "base64 0.22.1",
- "dirs",
  "serde",
  "serde_json",
  "sqlx",
