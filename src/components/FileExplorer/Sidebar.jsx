@@ -1,9 +1,11 @@
 import { useEffect, useRef } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { useFileList } from "../context/FileListContext";
-import useFolder from "../hooks/useFolder";
+import { useFileList } from "../../context/FileListContext";
+import useFolder from "../../hooks/useFolder";
 
-const Sidebar = () => {
+import ContextMenu from "../ContextMenu";
+
+const Sidebar = ({ appMode, setAppMode }) => {
 	const {
 		drives,
 		setDrives,
@@ -17,6 +19,10 @@ const Sidebar = () => {
 		selectedMediaFilename,
 		setSelectedMediaFilename,
 		setInfoBox,
+		contextMenu,
+		setContextMenu,
+		getFileExtension,
+		database,
 		IMAGE_TYPES,
 		AUDIO_TYPES,
 		VIDEO_TYPES,
@@ -29,15 +35,36 @@ const Sidebar = () => {
 	} = useFolder(currentDir, 5000);
 
 	const listRef = useRef();
+	const menuRef = useRef();
+
+	useEffect(() => {
+		const handleClick = (e) => {
+			if (menuRef.current && !menuRef.current.contains(e.target)) {
+				setContextMenu({ x: 0, y: 0, file: null });
+			}
+		};
+		const handleEsc = (e) => {
+			if (e.key === "Escape") {
+				setContextMenu({ x: 0, y: 0, file: null });
+			}
+		};
+		document.addEventListener("click", handleClick);
+		document.addEventListener("keydown", handleEsc);
+		return () => {
+			document.removeEventListener("click", handleClick);
+			document.removeEventListener("keydown", handleEsc);
+		};
+	}, [setContextMenu]);
 
 	useEffect(() => {
 		(async () => {
 			const allDrives = await invoke("get_all_drives");
-			setDrives({ allDrives, currentDrive: "" });
+			setDrives({ ...drives, allDrives });
 		})();
-	}, [setDrives]);
+	}, [setDrives, drives]);
 
 	const openDir = async (dir, type) => {
+		console.log(currentFiles);
 		setCurrentDir(dir);
 		setSelectedMedia(null);
 		setSelectedMediaFilename({ name: "", path: "", type: "", index: 0 });
@@ -68,11 +95,6 @@ const Sidebar = () => {
 		setSelectedMedia(null);
 		setSelectedMediaFilename({ name: "", path: "", type: "", index: 0 });
 		setInfoBox({ visible: false, content: "" });
-	};
-
-	const getFileExtension = (filename) => {
-		const parts = filename.split(".");
-		return parts.length > 1 ? parts.pop().toLowerCase() : "";
 	};
 
 	const handleKeyDown = (e) => {
@@ -175,29 +197,58 @@ const Sidebar = () => {
 							/>
 						</svg>
 					</button>
+
+					{/* Drive Selector */}
+					<select
+						className="ml-2 rounded border border-slate-300 bg-white px-2 py-1 text-sm"
+						value={drives.currentDrive}
+						onChange={async (e) => {
+							const dir = e.target.value;
+							if (dir) {
+								setDrives((prev) => ({
+									...prev,
+									currentDrive: e.target.value,
+								}));
+								await openDir(dir, "drives");
+							}
+						}}
+					>
+						<option value="" disabled>
+							Select Drive
+						</option>
+						{drives?.allDrives.map((drive) => (
+							<option key={drive} value={drive}>
+								{drive}
+							</option>
+						))}
+					</select>
 				</div>
 
-				{/* Drive Selector */}
-				<select
-					className="ml-2 rounded border border-slate-300 bg-white px-2 py-1 text-sm"
-					value={drives.currentDrive}
-					onChange={async (e) => {
-						const dir = e.target.value;
-						if (dir) {
-							setDrives((prev) => ({ ...prev, currentDrive: e.target.value }));
-							await openDir(dir, "drives");
-						}
+				{/* Mode Selectur */}
+				<button
+					type="button"
+					title="Change Mode"
+					onClick={() => {
+						setAppMode(!appMode);
 					}}
+					className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
 				>
-					<option value="" disabled>
-						Select Drive
-					</option>
-					{drives?.allDrives.map((drive) => (
-						<option key={drive} value={drive}>
-							{drive}
-						</option>
-					))}
-				</select>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						strokeWidth={1.5}
+						stroke="currentColor"
+						className="h-5 w-5"
+					>
+						<title>Change To Media Mode</title>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							d="M4 6h4v4H4V6zm6 0h4v4h-4V6zm6 0h4v4h-4V6zM4 14h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"
+						/>
+					</svg>
+				</button>
 			</div>
 
 			{/* File & Directory Listing */}
@@ -219,7 +270,17 @@ const Sidebar = () => {
 							return a.name.localeCompare(b.name);
 						})
 						.map((f, idx) => (
-							<li key={f.path}>
+							<li
+								key={f.path}
+								onContextMenu={(e) => {
+									e.preventDefault();
+									if (f.is_directory) {
+										setContextMenu({ x: e.clientX, y: e.clientY, file: f });
+									}
+								}}
+								title={f.name}
+								className="cursor-default hover:bg-slate-100"
+							>
 								<button
 									type="button"
 									className={`flex w-full items-center rounded-md text-left text-sm transition-colors duration-150
@@ -259,6 +320,58 @@ const Sidebar = () => {
 							</li>
 						))}
 				</ul>
+				{contextMenu.file && (
+					<div ref={menuRef}>
+						<ContextMenu
+							appMode={appMode}
+							x={contextMenu.x}
+							y={contextMenu.y}
+							onClose={() => setContextMenu({ x: 0, y: 0, file: null })}
+							onAdd={async () => {
+								try {
+									console.log("Add", contextMenu.file);
+
+									const folderFiles = await invoke("read_folder", {
+										dir: contextMenu.file.path,
+									});
+
+									// Batch insert
+									const values = folderFiles
+										.map(() => "(?, ?, ?, ?)")
+										.join(", ");
+									const params = folderFiles.flatMap((file) => [
+										file.name,
+										file.folder,
+										file.path,
+										getFileExtension(file.name),
+									]);
+
+									await database.execute(
+										`INSERT OR IGNORE INTO media (name, folder, path, type) VALUES ${values}`,
+										params,
+									);
+								} catch (err) {
+									console.error("DB insert failed:", err);
+								} finally {
+									setContextMenu({ x: 0, y: 0, file: null });
+								}
+							}}
+							onRemove={async () => {
+								try {
+									console.log("Remove", contextMenu.file);
+
+									await database.execute(`DELETE FROM media WHERE folder = ?`, [
+										contextMenu.file.path,
+									]);
+								} catch (err) {
+									console.error("DB remove failed:", err);
+								} finally {
+									setContextMenu({ x: 0, y: 0, file: null });
+								}
+							}}
+						/>
+					</div>
+				)}
 			</div>
 		</section>
 	);

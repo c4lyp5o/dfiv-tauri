@@ -1,7 +1,7 @@
-import { useState, useRef } from "react";
+import { useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useFileList } from "../context/FileListContext";
-import useFolder from "../hooks/useFolder";
+import { useFileList } from "../../context/FileListContext";
+import useFolder from "../../hooks/useFolder";
 
 export default function Options() {
 	const {
