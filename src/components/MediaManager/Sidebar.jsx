@@ -5,8 +5,10 @@ import useDb from "../../hooks/useDb";
 
 import ContextMenu from "../ContextMenu";
 
-export default function Sidebar({ appMode, setAppMode }) {
+export default function Sidebar() {
 	const {
+		appMode,
+		setAppMode,
 		setSelectedMedia,
 		selectedMediaFilename,
 		setSelectedMediaFilename,

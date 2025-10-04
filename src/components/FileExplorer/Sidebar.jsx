@@ -5,8 +5,10 @@ import useFolder from "../../hooks/useFolder";
 
 import ContextMenu from "../ContextMenu";
 
-const Sidebar = ({ appMode, setAppMode }) => {
+const Sidebar = () => {
 	const {
+		appMode,
+		setAppMode,
 		drives,
 		setDrives,
 		currentDir,
