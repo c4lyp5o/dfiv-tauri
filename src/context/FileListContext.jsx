@@ -4,7 +4,7 @@ import Database from "@tauri-apps/plugin-sql";
 const FileListContext = createContext();
 
 export function FileListProvider({ children }) {
-	const [appMode, setAppMode] = useState("explorer");
+	const [appMode, setAppMode] = useState(false);
 	const [drives, setDrives] = useState({ allDrives: [], currentDrive: "" });
 	const [currentDir, setCurrentDir] = useState("");
 	const [prevDir, setPrevDir] = useState([]);
