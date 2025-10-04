@@ -1,14 +1,28 @@
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
+use tauri_plugin_sql::{Migration, MigrationKind};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
-        .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+  let migrations = vec![
+    Migration {
+        version: 1,
+        description: "Initial migration",
+        sql: "CREATE TABLE IF NOT EXISTS media (id INTEGER PRIMARY KEY, name TEXT NOT NULL, folder TEXT NOT NULL, path TEXT UNIQUE NOT NULL, type TEXT NOT NULL);",
+        kind: MigrationKind::Up,
+    },
+      Migration {
+        version: 1,
+        description: "Rollback initial migration",
+        sql: "DROP TABLE IF EXISTS media;",
+        kind: MigrationKind::Down,
+    },
+  ];
+
+  tauri::Builder::default()
+    .plugin(
+      tauri_plugin_sql::Builder::default()
+        .add_migrations("sqlite:dfiv.db", migrations)
+        .build(),
+    )
+    .run(tauri::generate_context!())
+    .expect("error while running tauri application");
 }
