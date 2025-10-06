@@ -1,11 +1,11 @@
 import { useEffect, useRef } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { useFileList } from "../../context/FileListContext";
+import { useDMFVContext } from "../../context/DMFVContext";
 import useFolder from "../../hooks/useFolder";
 
 import ContextMenu from "../ContextMenu";
 
-const Sidebar = () => {
+export default function Sidebar() {
 	const {
 		appMode,
 		setAppMode,
@@ -23,12 +23,13 @@ const Sidebar = () => {
 		setInfoBox,
 		contextMenu,
 		setContextMenu,
-		getFileExtension,
 		database,
+		resetMediaAndInfo,
+		resetMediaInfoHistory,
 		IMAGE_TYPES,
 		AUDIO_TYPES,
 		VIDEO_TYPES,
-	} = useFileList();
+	} = useDMFVContext();
 
 	const {
 		data: currentFiles = [],
@@ -36,7 +37,6 @@ const Sidebar = () => {
 		error,
 	} = useFolder(currentDir, 5000);
 
-	const listRef = useRef();
 	const menuRef = useRef();
 
 	useEffect(() => {
@@ -58,19 +58,8 @@ const Sidebar = () => {
 		};
 	}, [setContextMenu]);
 
-	useEffect(() => {
-		(async () => {
-			const allDrives = await invoke("get_all_drives");
-			setDrives({ ...drives, allDrives });
-		})();
-	}, [setDrives, drives]);
-
 	const openDir = async (dir, type) => {
-		console.log(currentFiles);
 		setCurrentDir(dir);
-		setSelectedMedia(null);
-		setSelectedMediaFilename({ name: "", path: "", type: "", index: 0 });
-		setInfoBox({ visible: false, content: "" });
 		if (currentDir && type !== "drives") {
 			setPrevDir([...prevDir, currentDir]);
 			setNextDir([]); // reset forward history
@@ -83,9 +72,7 @@ const Sidebar = () => {
 		setNextDir([currentDir, ...nextDir]); // Push current into forward history
 		setCurrentDir(backDir); // Navigate
 		setPrevDir(prevDir.slice(0, -1)); // Pop from prev
-		setSelectedMedia(null);
-		setSelectedMediaFilename({ name: "", path: "", type: "", index: 0 });
-		setInfoBox({ visible: false, content: "" });
+		resetMediaAndInfo();
 	};
 
 	const goToNextDir = async () => {
@@ -94,9 +81,7 @@ const Sidebar = () => {
 		setPrevDir([...prevDir, currentDir]); // Push current into back history
 		setCurrentDir(forwardDir); // Navigate
 		setNextDir(nextDir.slice(1)); // Pop from next
-		setSelectedMedia(null);
-		setSelectedMediaFilename({ name: "", path: "", type: "", index: 0 });
-		setInfoBox({ visible: false, content: "" });
+		resetMediaAndInfo();
 	};
 
 	const handleKeyDown = (e) => {
@@ -111,9 +96,9 @@ const Sidebar = () => {
 			const nextIdx = Math.min(idx + 1, currentFiles.length - 1);
 			const file = currentFiles[nextIdx];
 			setSelectedMediaFilename({
-				name: file.path.split(/[/\\]/).pop(),
+				name: file.name,
 				path: file.path,
-				type: getFileExtension(file.name),
+				type: file.file_type,
 				index: nextIdx,
 			});
 			if (!file.is_directory) setSelectedMedia(convertFileSrc(file.path));
@@ -123,14 +108,15 @@ const Sidebar = () => {
 			const prevIdx = Math.max(idx - 1, 0);
 			const file = currentFiles[prevIdx];
 			setSelectedMediaFilename({
-				name: file.path.split(/[/\\]/).pop(),
+				name: file.name,
 				path: file.path,
-				type: getFileExtension(file.name),
+				type: file.file_type,
 				index: prevIdx,
 			});
 			if (!file.is_directory) setSelectedMedia(convertFileSrc(file.path));
 			else setSelectedMedia(null);
 		} else if (e.key === "Enter") {
+			e.preventDefault();
 			const file = currentFiles[idx];
 			if (file) {
 				if (file.is_directory) openDir(file.path);
@@ -141,97 +127,92 @@ const Sidebar = () => {
 
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: false
-		<section
-			className="flex h-full w-64 flex-col border-r border-slate-200 bg-slate-50 outline-0"
-			onKeyDown={handleKeyDown}
-			// biome-ignore lint/a11y/noNoninteractiveTabindex: false
-			tabIndex={0}
-		>
-			{/* Header with Navigation Controls */}
+		// biome-ignore lint/a11y/noNoninteractiveTabindex: false
+		<section onKeyDown={handleKeyDown} tabIndex={0}>
+			{/* Header */}
 			<div className="flex items-center justify-between border-b border-slate-200 p-2">
-				<div className="flex items-center gap-1">
-					{/* Back Button */}
-					<button
-						type="button"
-						title="Back"
-						onClick={goToPreviousDir}
-						disabled={prevDir.length === 0}
-						className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+				{/* Back Button */}
+				<button
+					type="button"
+					title="Back"
+					onClick={goToPreviousDir}
+					disabled={prevDir.length === 0}
+					className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						strokeWidth={1.5}
+						stroke="currentColor"
+						className="h-5 w-5"
 					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-							strokeWidth={1.5}
-							stroke="currentColor"
-							className="h-5 w-5"
-						>
-							<title>Back</title>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								d="M15.75 19.5 8.25 12l7.5-7.5"
-							/>
-						</svg>
-					</button>
+						<title>Back</title>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							d="M15.75 19.5 8.25 12l7.5-7.5"
+						/>
+					</svg>
+				</button>
 
-					{/* Forward Button */}
-					<button
-						type="button"
-						title="Forward"
-						onClick={goToNextDir}
-						disabled={nextDir.length === 0}
-						className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+				{/* Forward Button */}
+				<button
+					type="button"
+					title="Forward"
+					onClick={goToNextDir}
+					disabled={nextDir.length === 0}
+					className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						fill="none"
+						viewBox="0 0 24 24"
+						strokeWidth={1.5}
+						stroke="currentColor"
+						className="h-5 w-5"
 					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							fill="none"
-							viewBox="0 0 24 24"
-							strokeWidth={1.5}
-							stroke="currentColor"
-							className="h-5 w-5"
-						>
-							<title>Forward</title>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								d="m8.25 4.5 7.5 7.5-7.5 7.5"
-							/>
-						</svg>
-					</button>
+						<title>Forward</title>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							d="m8.25 4.5 7.5 7.5-7.5 7.5"
+						/>
+					</svg>
+				</button>
 
-					{/* Drive Selector */}
-					<select
-						className="ml-2 rounded border border-slate-300 bg-white px-2 py-1 text-sm"
-						value={drives.currentDrive}
-						onChange={async (e) => {
-							const dir = e.target.value;
-							if (dir) {
-								setDrives((prev) => ({
-									...prev,
-									currentDrive: e.target.value,
-								}));
-								await openDir(dir, "drives");
-							}
-						}}
-					>
-						<option value="" disabled>
-							Select Drive
+				{/* Drive Selector */}
+				<select
+					className="ml-2 rounded border border-slate-300 bg-white px-2 py-1 text-sm"
+					value={drives.currentDrive}
+					onChange={async (e) => {
+						const dir = e.target.value;
+						if (dir) {
+							setDrives((prev) => ({
+								...prev,
+								currentDrive: e.target.value,
+							}));
+							await openDir(dir, "drives");
+						}
+					}}
+				>
+					<option value="" disabled>
+						Select Drive
+					</option>
+					{drives?.allDrives.map((drive) => (
+						<option key={drive} value={drive}>
+							{drive}
 						</option>
-						{drives?.allDrives.map((drive) => (
-							<option key={drive} value={drive}>
-								{drive}
-							</option>
-						))}
-					</select>
-				</div>
+					))}
+				</select>
 
-				{/* Mode Selectur */}
+				{/* Mode Selector */}
 				<button
 					type="button"
 					title="Change Mode"
 					onClick={() => {
 						setAppMode(!appMode);
+						resetMediaInfoHistory();
 					}}
 					className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
 				>
@@ -264,7 +245,7 @@ const Sidebar = () => {
 				{error && (
 					<div className="px-3 text-xs text-red-500">Failed to load folder</div>
 				)}
-				<ul ref={listRef} className="p-1">
+				<ul className="p-1">
 					{currentFiles
 						.sort((a, b) => {
 							if (a.is_directory && !b.is_directory) return -1;
@@ -298,9 +279,9 @@ const Sidebar = () => {
 										} else {
 											setSelectedMedia(convertFileSrc(f.path));
 											setSelectedMediaFilename({
-												name: f.path.split(/[/\\]/).pop(),
+												name: f.name,
 												path: f.path,
-												type: getFileExtension(f.name),
+												type: f.file_type,
 												index: idx,
 											});
 										}
@@ -309,11 +290,11 @@ const Sidebar = () => {
 									<span className="w-5 text-center">
 										{f.is_directory
 											? "📁"
-											: IMAGE_TYPES.includes(getFileExtension(f.name))
+											: IMAGE_TYPES.includes(f.file_type)
 												? "🖼️"
-												: AUDIO_TYPES.includes(getFileExtension(f.name))
+												: AUDIO_TYPES.includes(f.file_type)
 													? "🎵"
-													: VIDEO_TYPES.includes(getFileExtension(f.name))
+													: VIDEO_TYPES.includes(f.file_type)
 														? "🎞️"
 														: "📄"}
 									</span>
@@ -322,6 +303,7 @@ const Sidebar = () => {
 							</li>
 						))}
 				</ul>
+
 				{contextMenu.file && (
 					<div ref={menuRef}>
 						<ContextMenu
@@ -333,23 +315,24 @@ const Sidebar = () => {
 								try {
 									console.log("Add", contextMenu.file);
 
-									const folderFiles = await invoke("read_folder", {
+									const folderFiles = await invoke("read_folder_recursive", {
 										dir: contextMenu.file.path,
 									});
 
 									// Batch insert
 									const values = folderFiles
-										.map(() => "(?, ?, ?, ?)")
+										.map(() => "(?, ?, ?, ?, ?)")
 										.join(", ");
 									const params = folderFiles.flatMap((file) => [
 										file.name,
+										file.size,
 										file.folder,
 										file.path,
-										getFileExtension(file.name),
+										file.file_type,
 									]);
 
 									await database.execute(
-										`INSERT OR IGNORE INTO media (name, folder, path, type) VALUES ${values}`,
+										`INSERT OR IGNORE INTO media (name, size, folder, path, file_type) VALUES ${values}`,
 										params,
 									);
 								} catch (err) {
@@ -377,6 +360,4 @@ const Sidebar = () => {
 			</div>
 		</section>
 	);
-};
-
-export default Sidebar;
+}
