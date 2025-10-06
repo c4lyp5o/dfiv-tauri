@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useFileList } from "../context/FileListContext";
+import { useDMFVContext } from "../context/DMFVContext";
 
 import Options from "./FileExplorer/Options";
 
@@ -10,7 +10,7 @@ export default function Viewer() {
 		IMAGE_TYPES,
 		AUDIO_TYPES,
 		VIDEO_TYPES,
-	} = useFileList();
+	} = useDMFVContext();
 
 	const [zoom, setZoom] = useState(1);
 	const [offset, setOffset] = useState({ x: 0, y: 0 });
