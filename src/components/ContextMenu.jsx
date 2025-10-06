@@ -7,8 +7,8 @@ export default function ContextMenu({
 	onRemove,
 }) {
 	return (
-		// biome-ignore lint/a11y/noStaticElementInteractions: <explanation>
-		// biome-ignore lint/a11y/useKeyWithClickEvents: <explanation>
+		// biome-ignore lint/a11y/noStaticElementInteractions: false
+		// biome-ignore lint/a11y/useKeyWithClickEvents: false
 		<div
 			className="absolute z-50 w-48 rounded-md border border-slate-300 bg-white shadow-lg"
 			style={{ top: y, left: x }}
