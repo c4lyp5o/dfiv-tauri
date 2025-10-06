@@ -1,10 +1,12 @@
 import { useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useFileList } from "../../context/FileListContext";
+import { useDMFVContext } from "../../context/DMFVContext";
 import useFolder from "../../hooks/useFolder";
+import useDb from "../../hooks/useDb";
 
 export default function Options() {
 	const {
+		appMode,
 		currentDir,
 		selectedMedia,
 		setSelectedMedia,
@@ -12,18 +14,30 @@ export default function Options() {
 		setSelectedMediaFilename,
 		infoBox,
 		setInfoBox,
+		database,
 		IMAGE_TYPES,
-	} = useFileList();
+	} = useDMFVContext();
 
-	const { mutate } = useFolder(currentDir, 5000);
+	const { mutate: mutateFolder } = useFolder(currentDir, 5000);
+	const { mutate: mutateDb } = useDb(5000);
+
 	const infoBtnRef = useRef(null);
 
 	const handleDelete = async () => {
+		if (!selectedMedia) return;
 		if (selectedMedia) {
 			setSelectedMedia(null);
-			await invoke("delete_file", { path: selectedMediaFilename.path });
+			if (appMode === false) {
+				await invoke("delete_file", { path: selectedMediaFilename.path });
+				mutateFolder();
+			} else {
+				await database.execute(`DELETE FROM media WHERE path = ?`, [
+					selectedMediaFilename.path,
+				]);
+				mutateDb();
+			}
 			setSelectedMediaFilename({ name: "", path: "", type: "", index: 0 });
-			mutate();
+			handleCloseInfo();
 		}
 	};
 
@@ -31,7 +45,7 @@ export default function Options() {
 		if (!selectedMedia) return;
 		if (!IMAGE_TYPES.includes(selectedMediaFilename.type.toLowerCase())) return;
 		if (infoBox.visible) {
-			setInfoBox({ visible: false, content: "" });
+			handleCloseInfo();
 			return;
 		}
 
