@@ -6,6 +6,7 @@ const fetchSavedMedia = async () => {
 	try {
 		if (!db) {
 			db = await Database.load("sqlite:dfiv.db");
+			await db.execute("PRAGMA journal_mode = WAL");
 		}
 		return await db.select("SELECT * FROM media;");
 	} catch (err) {
