@@ -129,6 +129,7 @@ export default function Sidebar() {
 		};
 	}, [dfmvDispatch]);
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: false
 	useEffect(() => {
 		if (searchWorkerRef.current) {
 			if (debouncedSearchQuery) {
