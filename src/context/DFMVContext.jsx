@@ -128,6 +128,9 @@ const dfmvReducer = (state, action) => {
 			return {
 				...state,
 				showSettings: !state.showSettings,
+				selectedMedia: null,
+				selectedMediaFilename: { name: "", path: "", type: "", index: 0 },
+				infoBox: { visible: false, content: "" },
 			};
 		case "RESET_MEDIA_AND_INFO":
 			return {
