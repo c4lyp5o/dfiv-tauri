@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 import { useDFMVContext } from "../../context/DFMVContext";
+import { useToast } from "../../context/ToastContext";
 import useFolder from "../../hooks/useFolder";
 
 import ContextMenu from "../ContextMenu";
@@ -15,6 +16,8 @@ export default function Sidebar() {
 		AUDIO_TYPES,
 		VIDEO_TYPES,
 	} = useDFMVContext();
+
+	const { showToast } = useToast();
 
 	const {
 		data: currentFiles = [],
@@ -316,6 +319,7 @@ export default function Sidebar() {
 										if (f.is_directory) {
 											openDir(f.path);
 										} else {
+											showToast(`File selected: ${f.name}`);
 											dfmvDispatch({
 												type: "SET_SELECTED_MEDIA",
 												payload: convertFileSrc(f.path),
