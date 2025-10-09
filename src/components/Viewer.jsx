@@ -1,29 +1,24 @@
 import { useEffect, useRef, useState } from "react";
-import { useDMFVContext } from "../context/DMFVContext";
+import { useDFMVContext } from "../context/DFMVContext";
 
 import Options from "./FileExplorer/Options";
 
 export default function Viewer() {
-	const {
-		selectedMedia,
-		selectedMediaFilename,
-		IMAGE_TYPES,
-		AUDIO_TYPES,
-		VIDEO_TYPES,
-	} = useDMFVContext();
+	const { dfmvState, IMAGE_TYPES, AUDIO_TYPES, VIDEO_TYPES } = useDFMVContext();
 
 	const [zoom, setZoom] = useState(1);
 	const [offset, setOffset] = useState({ x: 0, y: 0 });
 	const [dragging, setDragging] = useState(false);
 	const [start, setStart] = useState({ x: 0, y: 0 });
+
 	const containerRef = useRef();
 
 	useEffect(() => {
-		if (selectedMedia) {
+		if (dfmvState.selectedMedia) {
 			setZoom(1);
 			setOffset({ x: 0, y: 0 });
 		}
-	}, [selectedMedia]);
+	}, [dfmvState.selectedMedia]);
 
 	const handleWheel = (e) => {
 		if (e.deltaY < 0) {
@@ -34,7 +29,7 @@ export default function Viewer() {
 	};
 
 	const handleMouseDown = (e) => {
-		if (!selectedMedia) return;
+		if (!dfmvState.selectedMedia) return;
 		setDragging(true);
 		setStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
 	};
@@ -61,11 +56,11 @@ export default function Viewer() {
 			onMouseLeave={handleMouseLeave}
 			aria-label="Media viewer"
 		>
-			{selectedMedia && <Options />}
-			{IMAGE_TYPES.includes(selectedMediaFilename?.type) && (
+			{dfmvState.selectedMedia && <Options />}
+			{IMAGE_TYPES.includes(dfmvState.selectedMediaFilename?.type) && (
 				<img
-					src={selectedMedia}
-					alt={selectedMediaFilename.name}
+					src={dfmvState.selectedMedia}
+					alt={dfmvState.selectedMediaFilename.name}
 					draggable={false}
 					className="transition-transform duration-75"
 					style={{
@@ -76,22 +71,24 @@ export default function Viewer() {
 				/>
 			)}
 			{[...AUDIO_TYPES, ...VIDEO_TYPES].includes(
-				selectedMediaFilename?.type,
+				dfmvState.selectedMediaFilename?.type,
 			) && (
 				<div className="flex flex-col items-center">
 					{/** biome-ignore lint/a11y/useMediaCaption: false */}
 					<video
-						src={selectedMedia}
+						src={dfmvState.selectedMedia}
 						controls
 						className="max-w-full max-h-full mb-4"
-						title={selectedMediaFilename.file}
+						title={dfmvState.selectedMediaFilename.file}
 						preload="metadata"
 						autoPlay
 						loop
 					/>
 				</div>
 			)}
-			{!selectedMedia && <span className="text-white">Select media...</span>}
+			{!dfmvState.selectedMedia && (
+				<span className="text-white">Select media...</span>
+			)}
 		</section>
 	);
 }

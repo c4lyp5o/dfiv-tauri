@@ -1,13 +1,13 @@
-import { useDMFVContext } from "../context/DMFVContext";
+import { useDFMVContext } from "../context/DFMVContext";
 
 export default function BottomButtons() {
-	const { showSettings, setShowSettings } = useDMFVContext();
+	const { dfmvDispatch } = useDFMVContext();
 
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: false
 		// biome-ignore lint/a11y/useKeyWithClickEvents: false
 		<section
-			onClick={() => setShowSettings(!showSettings)}
+			onClick={() => dfmvDispatch({ type: "TOGGLE_SETTINGS" })}
 			className="w-64 h-8 bg-neutral-300 flex items-center justify-center gap-2 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
 		>
 			<svg

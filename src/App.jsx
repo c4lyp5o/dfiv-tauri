@@ -1,11 +1,11 @@
-import { DMFVProvider } from "./context/DMFVContext";
+import { DFMVProvider } from "./context/DFMVContext";
 import Main from "./views/Main";
 import "./App.css";
 
 export default function App() {
 	return (
-		<DMFVProvider>
+		<DFMVProvider>
 			<Main />
-		</DMFVProvider>
+		</DFMVProvider>
 	);
 }

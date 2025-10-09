@@ -1,11 +1,8 @@
-export default function ContextMenu({
-	appMode,
-	x,
-	y,
-	onClose,
-	onAdd,
-	onRemove,
-}) {
+import { useDFMVContext } from "../context/DFMVContext";
+
+export default function ContextMenu({ x, y, onClose, onAdd, onRemove }) {
+	const { dfmvState } = useDFMVContext();
+
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: false
 		// biome-ignore lint/a11y/useKeyWithClickEvents: false
@@ -14,7 +11,7 @@ export default function ContextMenu({
 			style={{ top: y, left: x }}
 			onClick={onClose} // close when clicking inside
 		>
-			{!appMode && (
+			{!dfmvState.appMode && (
 				<button
 					type="button"
 					className="block w-full px-4 py-2 text-left text-xs hover:bg-slate-100"

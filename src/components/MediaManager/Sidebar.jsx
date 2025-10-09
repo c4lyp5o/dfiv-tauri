@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { List } from "react-window";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { useDMFVContext } from "../../context/DMFVContext";
+import { useDFMVContext } from "../../context/DFMVContext";
 import useDb from "../../hooks/useDb";
 import useDebounce from "../../hooks/useDebounce";
 import SearchWorker from "../../utils/searchWorker?worker";
@@ -9,23 +9,16 @@ import SearchWorker from "../../utils/searchWorker?worker";
 import ContextMenu from "../ContextMenu";
 
 const VirtListRowComponent = ({ index, sorted, icon, style }) => {
-	const {
-		setContextMenu,
-		setInfoBox,
-		setSelectedMedia,
-		selectedMediaFilename,
-		setSelectedMediaFilename,
-	} = useDMFVContext();
+	const { dfmvDispatch, dfmvState } = useDFMVContext();
 
 	return (
 		<li
 			style={style}
 			onContextMenu={(e) => {
 				e.preventDefault();
-				setContextMenu({
-					x: e.clientX,
-					y: e.clientY,
-					file: sorted[index],
+				dfmvDispatch({
+					type: "SET_CONTEXT_MENU",
+					payload: { x: e.clientX, y: e.clientY, file: sorted[index] },
 				});
 			}}
 			title={sorted[index].path}
@@ -34,18 +27,27 @@ const VirtListRowComponent = ({ index, sorted, icon, style }) => {
 				type="button"
 				className={`flex w-full items-center rounded-md text-left text-sm transition-colors duration-150
             ${
-							selectedMediaFilename?.path === sorted[index].path
+							dfmvState.selectedMediaFilename?.path === sorted[index].path
 								? "bg-blue-100 font-medium text-blue-800"
 								: "text-slate-700 hover:bg-slate-200"
 						}`}
 				onClick={() => {
-					setInfoBox({ visible: false, content: "" });
-					setSelectedMedia(convertFileSrc(sorted[index].path));
-					setSelectedMediaFilename({
-						name: sorted[index].name,
-						path: sorted[index].path,
-						type: sorted[index].file_type,
-						index,
+					dfmvDispatch({
+						type: "SET_INFO_BOX",
+						payload: { visible: false, content: "" },
+					});
+					dfmvDispatch({
+						type: "SET_SELECTED_MEDIA",
+						payload: convertFileSrc(sorted[index].path),
+					});
+					dfmvDispatch({
+						type: "SET_SELECTED_MEDIA_FILENAME",
+						payload: {
+							name: sorted[index].name,
+							path: sorted[index].path,
+							type: sorted[index].file_type,
+							index,
+						},
 					});
 				}}
 			>
@@ -56,16 +58,16 @@ const VirtListRowComponent = ({ index, sorted, icon, style }) => {
 	);
 };
 
-const VirtList = ({ currentFiles, types, icon }) => {
+const VirtList = ({ mediaFiles, types, icon }) => {
 	const sorted = useMemo(() => {
-		return currentFiles
+		return mediaFiles
 			.filter((f) => Array.isArray(types) && types.includes(f.file_type))
 			.sort((a, b) => {
 				if (a.is_directory && !b.is_directory) return -1;
 				if (!a.is_directory && b.is_directory) return 1;
 				return a.name.localeCompare(b.name);
 			});
-	}, [currentFiles, types]);
+	}, [mediaFiles, types]);
 
 	return (
 		<List
@@ -82,20 +84,13 @@ const VirtList = ({ currentFiles, types, icon }) => {
 
 export default function Sidebar() {
 	const {
-		appMode,
-		setAppMode,
-		selectedMediaFilename,
-		setSelectedMediaFilename,
-		setSelectedMedia,
-		contextMenu,
-		setContextMenu,
-		setInfoBox,
-		database,
-		resetMediaInfoHistory,
+		dfmvState,
+		dfmvDispatch,
+		startRemove,
 		IMAGE_TYPES,
 		AUDIO_TYPES,
 		VIDEO_TYPES,
-	} = useDMFVContext();
+	} = useDFMVContext();
 
 	const [searchQuery, setSearchQuery] = useState("");
 	const [filtered, setFiltered] = useState([]);
@@ -107,17 +102,23 @@ export default function Sidebar() {
 
 	const menuRef = useRef();
 	const scrollableContainerRef = useRef();
-	const workerRef = useRef(null);
+	const searchWorkerRef = useRef(null);
 
 	useEffect(() => {
 		const handleClick = (e) => {
 			if (menuRef.current && !menuRef.current.contains(e.target)) {
-				setContextMenu({ x: 0, y: 0, file: null });
+				dfmvDispatch({
+					type: "SET_CONTEXT_MENU",
+					payload: { x: 0, y: 0, file: null },
+				});
 			}
 		};
 		const handleEsc = (e) => {
 			if (e.key === "Escape") {
-				setContextMenu({ x: 0, y: 0, file: null });
+				dfmvDispatch({
+					type: "SET_CONTEXT_MENU",
+					payload: { x: 0, y: 0, file: null },
+				});
 			}
 		};
 		document.addEventListener("click", handleClick);
@@ -126,12 +127,12 @@ export default function Sidebar() {
 			document.removeEventListener("click", handleClick);
 			document.removeEventListener("keydown", handleEsc);
 		};
-	}, [setContextMenu]);
+	}, [dfmvDispatch]);
 
 	useEffect(() => {
-		if (workerRef.current) {
+		if (searchWorkerRef.current) {
 			if (debouncedSearchQuery) {
-				workerRef.current.postMessage({
+				searchWorkerRef.current.postMessage({
 					query: debouncedSearchQuery,
 					files: currentFiles,
 				});
@@ -142,13 +143,13 @@ export default function Sidebar() {
 	}, [debouncedSearchQuery]);
 
 	useEffect(() => {
-		workerRef.current = new SearchWorker();
-		workerRef.current.onmessage = (e) => {
+		searchWorkerRef.current = new SearchWorker();
+		searchWorkerRef.current.onmessage = (e) => {
 			setFiltered(e.data);
 		};
 
 		return () => {
-			workerRef.current?.terminate();
+			searchWorkerRef.current?.terminate();
 		};
 	}, []);
 
@@ -168,47 +169,79 @@ export default function Sidebar() {
 		}
 	};
 
-	const handleSearch = (e) => {
-		setSearchQuery(e.target.value);
-	};
+	const handleSearch = (e) => setSearchQuery(e.target.value);
 
 	const handleKeyDown = (e) => {
-		if (!currentFiles.length) return;
+		if (!mediaFiles.length) return;
 
-		setInfoBox({ visible: false, content: "" });
+		dfmvDispatch({
+			type: "SET_INFO_BOX",
+			payload: { visible: false, content: "" },
+		});
 
-		const idx = selectedMediaFilename.index ?? 0;
+		const idx = dfmvState.selectedMediaFilename.index ?? 0;
 
 		if (e.key === "ArrowDown") {
 			e.preventDefault();
-			const nextIdx = Math.min(idx + 1, currentFiles.length - 1);
-			const file = currentFiles[nextIdx];
-			setSelectedMediaFilename({
-				name: file.name,
-				path: file.path,
-				type: file.file_type,
-				index: nextIdx,
+			const nextIdx = Math.min(idx + 1, mediaFiles.length - 1);
+			const file = mediaFiles[nextIdx];
+			dfmvDispatch({
+				type: "SET_SELECTED_MEDIA_FILENAME",
+				payload: {
+					name: file.name,
+					path: file.path,
+					type: file.file_type,
+					index: nextIdx,
+				},
 			});
-			if (!file.is_directory) setSelectedMedia(convertFileSrc(file.path));
-			else setSelectedMedia(null);
+
+			if (!file.is_directory) {
+				dfmvDispatch({
+					type: "SET_SELECTED_MEDIA",
+					payload: convertFileSrc(file.path),
+				});
+			} else {
+				dfmvDispatch({
+					type: "SET_SELECTED_MEDIA",
+					payload: null,
+				});
+			}
 		} else if (e.key === "ArrowUp") {
 			e.preventDefault();
 			const prevIdx = Math.max(idx - 1, 0);
-			const file = currentFiles[prevIdx];
-			setSelectedMediaFilename({
-				name: file.name,
-				path: file.path,
-				type: file.file_type,
-				index: prevIdx,
+			const file = mediaFiles[prevIdx];
+			dfmvDispatch({
+				type: "SET_SELECTED_MEDIA_FILENAME",
+				payload: {
+					name: file.name,
+					path: file.path,
+					type: file.file_type,
+					index: prevIdx,
+				},
 			});
-			if (!file.is_directory) setSelectedMedia(convertFileSrc(file.path));
-			else setSelectedMedia(null);
+			if (!file.is_directory) {
+				dfmvDispatch({
+					type: "SET_SELECTED_MEDIA",
+					payload: convertFileSrc(file.path),
+				});
+			} else {
+				dfmvDispatch({
+					type: "SET_SELECTED_MEDIA",
+					payload: null,
+				});
+			}
 		} else if (e.key === "Enter") {
 			e.preventDefault();
-			const file = currentFiles[idx];
+			const file = mediaFiles[idx];
 			if (file) {
-				if (file.is_directory) openDir(file.path);
-				else setSelectedMedia(convertFileSrc(file.path));
+				if (file.is_directory) {
+					openDir(file.path);
+				} else {
+					dfmvDispatch({
+						type: "SET_SELECTED_MEDIA",
+						payload: convertFileSrc(file.path),
+					});
+				}
 			}
 		}
 	};
@@ -237,8 +270,8 @@ export default function Sidebar() {
 					type="button"
 					title="Change Mode"
 					onClick={() => {
-						setAppMode(!appMode);
-						resetMediaInfoHistory();
+						dfmvDispatch({ type: "TOGGLE_APP_MODE" });
+						dfmvDispatch({ type: "RESET_MEDIA_AND_INFO" });
 					}}
 					className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
 				>
@@ -273,7 +306,7 @@ export default function Sidebar() {
 						<span>{openAccordion === "images" ? "−" : "+"}</span>
 					</button>
 					{openAccordion === "images" && (
-						<VirtList currentFiles={mediaFiles} types={IMAGE_TYPES} icon="🖼️" />
+						<VirtList mediaFiles={mediaFiles} types={IMAGE_TYPES} icon="🖼️" />
 					)}
 				</div>
 
@@ -288,7 +321,7 @@ export default function Sidebar() {
 						<span>{openAccordion === "audios" ? "−" : "+"}</span>
 					</button>
 					{openAccordion === "audios" && (
-						<VirtList currentFiles={mediaFiles} types={AUDIO_TYPES} icon="🎵" />
+						<VirtList mediaFiles={mediaFiles} types={AUDIO_TYPES} icon="🎵" />
 					)}
 				</div>
 
@@ -303,29 +336,40 @@ export default function Sidebar() {
 						<span>{openAccordion === "videos" ? "−" : "+"}</span>
 					</button>
 					{openAccordion === "videos" && (
-						<VirtList currentFiles={mediaFiles} types={VIDEO_TYPES} icon="🎞️" />
+						<VirtList mediaFiles={mediaFiles} types={VIDEO_TYPES} icon="🎞️" />
 					)}
 				</div>
 
-				{contextMenu.file && (
+				{dfmvState.contextMenu.file && (
 					<div ref={menuRef}>
 						<ContextMenu
-							appMode={appMode}
-							x={contextMenu.x}
-							y={contextMenu.y}
-							onClose={() => setContextMenu({ x: 0, y: 0, file: null })}
-							onRemove={async () => {
+							appMode={dfmvState.appMode}
+							x={dfmvState.contextMenu.x}
+							y={dfmvState.contextMenu.y}
+							onClose={() =>
+								dfmvDispatch({
+									type: "SET_CONTEXT_MENU",
+									payload: { x: 0, y: 0, file: null },
+								})
+							}
+							onRemove={() => {
 								try {
-									console.log("Remove", contextMenu.file);
+									console.log("Remove", dfmvState.contextMenu.file);
 
-									await database.execute(`DELETE FROM media WHERE path = ?`, [
-										contextMenu.file.path,
-									]);
+									startRemove(dfmvState.contextMenu.file.path, "file");
+
+									// await dbRef.current.execute(
+									// 	`DELETE FROM media WHERE path = ?`,
+									// 	[dfmvState.contextMenu.file.path],
+									// );
 								} catch (err) {
 									console.error("DB remove failed:", err);
 								} finally {
 									mutate();
-									setContextMenu({ x: 0, y: 0, file: null });
+									dfmvDispatch({
+										type: "SET_CONTEXT_MENU",
+										payload: { x: 0, y: 0, file: null },
+									});
 								}
 							}}
 						/>

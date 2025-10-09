@@ -1,12 +1,12 @@
-import { useState, useMemo } from "react";
-import { useDMFVContext } from "../context/DMFVContext";
+import { useMemo } from "react";
+import { useDFMVContext } from "../context/DFMVContext";
 import useDb from "../hooks/useDb";
 
 export default function Settings() {
-	const { database, IMAGE_TYPES, AUDIO_TYPES, VIDEO_TYPES } = useDMFVContext();
-	const { data: currentFiles = [], mutate } = useDb(5000);
+	const { dbState, startNukeDb, IMAGE_TYPES, AUDIO_TYPES, VIDEO_TYPES } =
+		useDFMVContext();
 
-	const [isNuking, setIsNuking] = useState(false);
+	const { data: currentFiles = [], mutate } = useDb(5000);
 
 	const { totalSize, counts } = useMemo(() => {
 		const counts = { images: 0, audios: 0, videos: 0 };
@@ -31,14 +31,12 @@ export default function Settings() {
 		// 	return;
 
 		try {
-			setIsNuking(true);
-			await database.execute("DELETE FROM media");
+			startNukeDb();
 			console.log("Database nuked successfully");
 		} catch (error) {
-			console.error("Error nuking database:", error);
+			console.error("Error nuking db:", error);
 		} finally {
 			mutate();
-			setIsNuking(false);
 		}
 	};
 
@@ -90,6 +88,55 @@ export default function Settings() {
 				</dl>
 			</div>
 
+			{/* Section: DB Worker Status */}
+			<div>
+				<h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+					DB Worker Status
+				</h2>
+				<div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+					<dl className="space-y-2 text-sm">
+						<div className="flex justify-between items-center">
+							<dt className="text-slate-600">Status</dt>
+							<dd
+								className={`font-medium ${
+									dbState.status.toLowerCase() === "imported"
+										? "text-green-600"
+										: dbState.status.toLowerCase() === "error"
+											? "text-red-600"
+											: dbState.status.toLowerCase() === "importing"
+												? "text-blue-600"
+												: "text-slate-800"
+								}`}
+							>
+								{dbState.status}
+							</dd>
+						</div>
+
+						<div className="flex justify-between items-center">
+							<dt className="text-slate-600">Message</dt>
+							<dd className="font-medium text-slate-800">{dbState.message}</dd>
+						</div>
+
+						{dbState.status.toLowerCase() === "importing" && (
+							<div className="space-y-1">
+								<dt className="text-slate-600">Progress</dt>
+								<dd className="flex flex-col gap-1">
+									<div className="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+										<div
+											className="h-full bg-blue-500 transition-all duration-500"
+											style={{ width: `${dbState.progress || 0}%` }}
+										/>
+									</div>
+									<p className="text-right text-xs text-slate-600">
+										{dbState.progress || 0}%
+									</p>
+								</dd>
+							</div>
+						)}
+					</dl>
+				</div>
+			</div>
+
 			{/* Section: Nuke Database */}
 			<div>
 				<h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -100,30 +147,20 @@ export default function Settings() {
 				</p>
 				<button
 					type="button"
-					disabled={isNuking}
-					aria-busy={isNuking}
+					disabled={dbState.isNuking}
+					aria-busy={dbState.isNuking}
 					aria-label="Nuke Database"
 					title="Nuke Database"
 					className={`rounded px-3 py-1.5 text-sm font-medium shadow focus:outline-none focus:ring-2 ${
-						isNuking
+						dbState.isNuking
 							? "bg-red-300 text-white cursor-not-allowed"
 							: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500"
 					}`}
 					onClick={handleNukeDatabase}
 				>
-					{isNuking ? "Nuking…" : "Nuke Database"}
+					{dbState.isNuking ? "Nuking…" : "Nuke Database"}
 				</button>
 			</div>
-
-			{/* Section: Placeholder 2 */}
-			{/* <div>
-				<h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-					Placeholder Section 2
-				</h2>
-				<p className="text-sm text-slate-600">
-					Add content or settings controls here.
-				</p>
-			</div> */}
 		</div>
 	);
 }
