@@ -12,9 +12,11 @@
 	"app": {
 		"windows": [
 			{
+				"decorations": true,
 				"title": "Damn Fast Media Viewer",
 				"width": 1280,
-				"height": 720
+				"height": 720,
+				"transparent": true
 			}
 		],
 		"security": {
@@ -39,6 +41,7 @@
 			"icons/128x128@2x.png",
 			"icons/icon.icns",
 			"icons/icon.ico"
-		]
+		],
+		"resources": ["lib/**/*"]
 	}
 }
