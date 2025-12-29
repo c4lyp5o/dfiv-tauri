@@ -14,3 +14,39 @@
 .animate-fade-in-up {
 	animation: fade-in-up 0.25s ease-out;
 }
+
+/* 1. Reset the default appearance */
+input[type="range"] {
+	-webkit-appearance: none;
+	appearance: none;
+	background: transparent;
+	height: 20px; /* Give it a hit area */
+	width: 100%;
+}
+
+/* 2. Style the "Thumb" (the circle you drag) */
+input[type="range"]::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	appearance: none;
+	height: 14px;
+	width: 14px;
+	border-radius: 50%;
+	background: #3b82f6; /* Blue-500 */
+	margin-top: -5px; /* Centers thumb on the track */
+	cursor: pointer;
+	box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
+
+/* 3. Style the "Track" (the line) */
+input[type="range"]::-webkit-slider-runnable-track {
+	width: 100%;
+	height: 4px;
+	cursor: pointer;
+	background: #4b5563; /* Gray-600 */
+	border-radius: 2px;
+}
+
+/* Optional: Focus styles for accessibility */
+input[type="range"]:focus {
+	outline: none;
+}
