@@ -49,43 +49,44 @@ export default function Settings() {
 	};
 
 	return (
-		<div className="flex-1 overflow-y-auto p-4 space-y-6">
+		<div className="flex-1 overflow-y-auto p-4 space-y-6 bg-gray-800">
 			{/* Section: Media Info */}
-			<div className="mt-4 rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
-				<h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
+			<div>
+				<h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
 					Media Info
 				</h2>
+				<div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+					<dl className="space-y-1 text-sm">
+						<div className="flex justify-between">
+							<dt className="text-slate-600">Items</dt>
+							<dd className="font-medium text-slate-800">
+								{currentFiles.length}
+							</dd>
+						</div>
 
-				<dl className="space-y-1 text-sm">
-					<div className="flex justify-between">
-						<dt className="text-slate-600">Items</dt>
-						<dd className="font-medium text-slate-800">
-							{currentFiles.length}
-						</dd>
-					</div>
+						<div className="flex justify-between">
+							<dt className="text-slate-600">Size</dt>
+							<dd className="font-medium text-slate-800">
+								{formatBytes(totalSize)}
+							</dd>
+						</div>
 
-					<div className="flex justify-between">
-						<dt className="text-slate-600">Size</dt>
-						<dd className="font-medium text-slate-800">
-							{formatBytes(totalSize)}
-						</dd>
-					</div>
+						<div className="flex justify-between">
+							<dt className="text-slate-600">Images</dt>
+							<dd className="font-medium text-slate-800">{counts.images}</dd>
+						</div>
 
-					<div className="flex justify-between">
-						<dt className="text-slate-600">Images</dt>
-						<dd className="font-medium text-slate-800">{counts.images}</dd>
-					</div>
+						<div className="flex justify-between">
+							<dt className="text-slate-600">Audios</dt>
+							<dd className="font-medium text-slate-800">{counts.audios}</dd>
+						</div>
 
-					<div className="flex justify-between">
-						<dt className="text-slate-600">Audios</dt>
-						<dd className="font-medium text-slate-800">{counts.audios}</dd>
-					</div>
-
-					<div className="flex justify-between">
-						<dt className="text-slate-600">Videos</dt>
-						<dd className="font-medium text-slate-800">{counts.videos}</dd>
-					</div>
-				</dl>
+						<div className="flex justify-between">
+							<dt className="text-slate-600">Videos</dt>
+							<dd className="font-medium text-slate-800">{counts.videos}</dd>
+						</div>
+					</dl>
+				</div>
 			</div>
 
 			{/* Section: DB Worker Status */}
@@ -142,24 +143,26 @@ export default function Settings() {
 				<h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
 					Nuke Database
 				</h2>
-				<p className="mb-3 text-sm text-slate-600">
-					This will permanently delete all stored data. Proceed with caution.
-				</p>
-				<button
-					type="button"
-					disabled={dbState.isNuking}
-					aria-busy={dbState.isNuking}
-					aria-label="Nuke Database"
-					title="Nuke Database"
-					className={`rounded px-3 py-1.5 text-sm font-medium shadow focus:outline-none focus:ring-2 ${
-						dbState.isNuking
-							? "bg-red-300 text-white cursor-not-allowed"
-							: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500"
-					}`}
-					onClick={handleNukeDatabase}
-				>
-					{dbState.isNuking ? "Nuking…" : "Nuke Database"}
-				</button>
+				<div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+					<p className="mb-3 text-sm text-slate-600">
+						This will permanently delete all stored data. Proceed with caution.
+					</p>
+					<button
+						type="button"
+						disabled={dbState.isNuking}
+						aria-busy={dbState.isNuking}
+						aria-label="Nuke Database"
+						title="Nuke Database"
+						className={`rounded px-3 py-1.5 text-sm font-medium shadow focus:outline-none focus:ring-2 ${
+							dbState.isNuking
+								? "bg-red-300 text-white cursor-not-allowed"
+								: "bg-red-600 text-white hover:bg-red-700 focus:ring-red-500"
+						}`}
+						onClick={handleNukeDatabase}
+					>
+						{dbState.isNuking ? "Nuking…" : "Nuke Database"}
+					</button>
+				</div>
 			</div>
 		</div>
 	);
