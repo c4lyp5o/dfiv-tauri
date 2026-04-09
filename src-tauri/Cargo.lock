@@ -735,6 +735,7 @@ dependencies = [
  "tauri-plugin-libmpv",
  "tauri-plugin-opener",
  "tauri-plugin-sql",
+ "walkdir",
 ]
 
 [[package]]
