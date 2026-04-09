@@ -1,21 +1,15 @@
 import { useEffect, useRef } from "react";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { useDFMVContext } from "../../context/DFMVContext";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import { useDBContext, useDFMVContext } from "../../context/DFMVContext";
 import { useToast } from "../../context/ToastContext";
 import useFolder from "../../hooks/useFolder";
 
 import ContextMenu from "../ContextMenu";
 
 export default function Sidebar() {
-	const {
-		dfmvState,
-		dfmvDispatch,
-		startImport,
-		startRemove,
-		IMAGE_TYPES,
-		AUDIO_TYPES,
-		VIDEO_TYPES,
-	} = useDFMVContext();
+	const { startImport, startRemove } = useDBContext();
+	const { dfmvState, dfmvDispatch, IMAGE_TYPES, AUDIO_TYPES, VIDEO_TYPES } =
+		useDFMVContext();
 
 	const { showToast } = useToast();
 
@@ -364,36 +358,11 @@ export default function Sidebar() {
 									payload: { x: 0, y: 0, file: null },
 								})
 							}
-							onAdd={async () => {
+							onAdd={() => {
 								try {
-									console.log("Add", dfmvState.contextMenu.file);
-
-									const folderFiles = await invoke("read_folder_recursive", {
-										dir: dfmvState.contextMenu.file.path,
-									});
-
-									startImport(folderFiles);
-									// // Batch insert
-									// const values = folderFiles
-									// 	.map(() => "(?, ?, ?, ?, ?)")
-									// 	.join(", ");
-									// const params = folderFiles.flatMap((file) => [
-									// 	file.name,
-									// 	file.size,
-									// 	file.folder,
-									// 	file.path,
-									// 	file.file_type,
-									// ]);
-
-									// dbDispatch({ type: "TEST_DB_WORKER" });
-									// dbWorkerRef.current.postMessage({ files: folderFiles });
-
-									// await dbRef.current.execute(
-									// 	`INSERT OR IGNORE INTO media (name, size, folder, path, file_type) VALUES ${values}`,
-									// 	params,
-									// );
+									startImport(dfmvState.contextMenu.file.path);
 								} catch (err) {
-									console.error("DB insert failed:", err);
+									console.error("DB add failed:", err);
 								} finally {
 									dfmvDispatch({
 										type: "SET_CONTEXT_MENU",
@@ -403,8 +372,6 @@ export default function Sidebar() {
 							}}
 							onRemove={() => {
 								try {
-									console.log("Remove", dfmvState.contextMenu.file);
-
 									startRemove(dfmvState.contextMenu.file.path, "folder");
 								} catch (err) {
 									console.error("DB remove failed:", err);

@@ -1,10 +1,10 @@
 import { useMemo } from "react";
-import { useDFMVContext } from "../context/DFMVContext";
+import { useDBContext, useDFMVContext } from "../context/DFMVContext";
 import useDb from "../hooks/useDb";
 
 export default function Settings() {
-	const { dbState, startNukeDb, IMAGE_TYPES, AUDIO_TYPES, VIDEO_TYPES } =
-		useDFMVContext();
+	const { dbState, startNukeDb } = useDBContext();
+	const { IMAGE_TYPES, AUDIO_TYPES, VIDEO_TYPES } = useDFMVContext();
 
 	const { data: currentFiles = [], mutate } = useDb(5000);
 
@@ -89,10 +89,10 @@ export default function Settings() {
 				</div>
 			</div>
 
-			{/* Section: DB Worker Status */}
+			{/* Section: Task Status */}
 			<div>
 				<h2 className="mb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
-					DB Worker Status
+					Task Status
 				</h2>
 				<div className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
 					<dl className="space-y-2 text-sm">
@@ -100,11 +100,15 @@ export default function Settings() {
 							<dt className="text-slate-600">Status</dt>
 							<dd
 								className={`font-medium ${
-									dbState.status.toLowerCase() === "imported"
+									dbState.status.toLowerCase() === "imported" ||
+									dbState.status.toLowerCase() === "removed" ||
+									dbState.status.toLowerCase() === "nuked"
 										? "text-green-600"
-										: dbState.status.toLowerCase() === "error"
+										: dbState.status.toLowerCase() === "error" ||
+												dbState.status.toLowerCase() === "nuking"
 											? "text-red-600"
-											: dbState.status.toLowerCase() === "importing"
+											: dbState.status.toLowerCase() === "importing" ||
+													dbState.status.toLowerCase() === "removing"
 												? "text-blue-600"
 												: "text-slate-800"
 								}`}

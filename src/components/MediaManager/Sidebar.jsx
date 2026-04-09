@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { List } from "react-window";
 import { convertFileSrc } from "@tauri-apps/api/core";
-import { useDFMVContext } from "../../context/DFMVContext";
+import { useDBContext, useDFMVContext } from "../../context/DFMVContext";
 import useDb from "../../hooks/useDb";
 import useDebounce from "../../hooks/useDebounce";
 import SearchWorker from "../../utils/searchWorker?worker";
@@ -83,14 +83,9 @@ const VirtList = ({ mediaFiles, types, icon }) => {
 };
 
 export default function Sidebar() {
-	const {
-		dfmvState,
-		dfmvDispatch,
-		startRemove,
-		IMAGE_TYPES,
-		AUDIO_TYPES,
-		VIDEO_TYPES,
-	} = useDFMVContext();
+	const { startRemove } = useDBContext();
+	const { dfmvState, dfmvDispatch, IMAGE_TYPES, AUDIO_TYPES, VIDEO_TYPES } =
+		useDFMVContext();
 
 	const [searchQuery, setSearchQuery] = useState("");
 	const [filtered, setFiltered] = useState([]);
@@ -355,14 +350,7 @@ export default function Sidebar() {
 							}
 							onRemove={() => {
 								try {
-									console.log("Remove", dfmvState.contextMenu.file);
-
 									startRemove(dfmvState.contextMenu.file.path, "file");
-
-									// await dbRef.current.execute(
-									// 	`DELETE FROM media WHERE path = ?`,
-									// 	[dfmvState.contextMenu.file.path],
-									// );
 								} catch (err) {
 									console.error("DB remove failed:", err);
 								} finally {

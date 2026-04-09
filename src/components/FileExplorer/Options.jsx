@@ -1,11 +1,12 @@
 import { useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { useDFMVContext } from "../../context/DFMVContext";
+import { useDBContext, useDFMVContext } from "../../context/DFMVContext";
 import useFolder from "../../hooks/useFolder";
 import useDb from "../../hooks/useDb";
 
 export default function Options() {
-	const { dfmvState, dfmvDispatch, dbRef, IMAGE_TYPES } = useDFMVContext();
+	const { startRemove } = useDBContext();
+	const { dfmvState, dfmvDispatch, IMAGE_TYPES } = useDFMVContext();
 
 	const { mutate: mutateFolder } = useFolder(dfmvState.currentDir, 5000);
 	const { mutate: mutateDb } = useDb(5000);
@@ -25,9 +26,7 @@ export default function Options() {
 				});
 				mutateFolder();
 			} else {
-				await dbRef.current.execute(`DELETE FROM media WHERE path = ?`, [
-					dfmvState.selectedMediaFilename.path,
-				]);
+				await startRemove(dfmvState.selectedMediaFilename.path, "file");
 				mutateDb();
 			}
 			dfmvDispatch({
@@ -118,7 +117,7 @@ export default function Options() {
 
 				{dfmvState.infoBox.visible && (
 					<div
-						className="absolute right-0 mt-2 min-w-[180px] bg-white text-black text-xs rounded shadow-lg p-2 border border-gray-300 whitespace-pre z-50"
+						className="absolute right-0 mt-2 min-w-45 bg-white text-black text-xs rounded shadow-lg p-2 border border-gray-300 whitespace-pre z-50"
 						style={{ top: "100%" }}
 					>
 						<button
