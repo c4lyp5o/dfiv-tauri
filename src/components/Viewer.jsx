@@ -118,7 +118,7 @@ export default function Viewer() {
 		try {
 			if (!playbackState.visible) {
 				await setProperty("hwdec", "no");
-				await setProperty("vf", "lavfi=[pixelize=w=96:h=96]");
+				await setProperty("vf", "lavfi=[pixelize=w=48:h=48]");
 			} else {
 				await setProperty("hwdec", "auto-safe");
 				await setProperty("vf", "");
@@ -155,8 +155,6 @@ export default function Viewer() {
 		console.log("new volume", newVolume);
 		const vol = Math.max(0, Math.min(100, newVolume));
 		await setProperty("volume", vol);
-
-		// Optimistically update state so UI feels snappy
 		setPlaybackState((prev) => ({ ...prev, volume: vol }));
 	};
 
@@ -233,17 +231,23 @@ export default function Viewer() {
 	useEffect(() => {
 		if (!isVideo) return;
 
+		let timeoutId;
+
 		const resizeObserver = new ResizeObserver(() => {
-			updateMpvLayout();
+			if (timeoutId) clearTimeout(timeoutId);
+			timeoutId = setTimeout(() => {
+				updateMpvLayout();
+			}, 16);
 		});
 
 		if (containerRef.current) {
 			resizeObserver.observe(containerRef.current);
 		}
 
-		updateMpvLayout();
-
-		return () => resizeObserver.disconnect();
+		return () => {
+			if (timeoutId) clearTimeout(timeoutId);
+			resizeObserver.disconnect();
+		};
 	}, [isVideo, updateMpvLayout]);
 
 	return (
