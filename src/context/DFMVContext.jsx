@@ -6,8 +6,8 @@ import {
 	useRef,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import Database from "@tauri-apps/plugin-sql";
-import DbWorker from "../utils/dbWorker?worker";
 
 const dbReducerInitialState = {
 	status: "Idle",
@@ -29,7 +29,7 @@ const dbReducer = (state, action) => {
 			return {
 				...state,
 				status: "Importing",
-				message: `Imported ${action.payload.inserted}/${action.payload.total} files`,
+				message: `Importing ${action.payload.inserted}/${action.payload.total} files`,
 				progress: action.payload.percent,
 			};
 		case "IMPORT_SUCCESS":
@@ -42,12 +42,26 @@ const dbReducer = (state, action) => {
 		case "IMPORT_FAILURE":
 			return {
 				...state,
-				status: "error",
+				status: "Error",
 				message: `Import failed: ${action.payload}`,
+			};
+		case "REMOVE_SUCCESS":
+			return {
+				...state,
+				status: "Removed",
+				message: `Removed the ${action.payload.itemType} - ${action.payload.item}`,
+			};
+		case "REMOVE_FAILURE":
+			return {
+				...state,
+				status: "Error",
+				message: `Removed failed: ${action.payload}`,
 			};
 		case "NUKE_DB":
 			return {
 				...state,
+				status: !state.isNuking ? "Nuking" : "Nuked",
+				message: !state.isNuking ? "Nuking the database..." : "Database nuked",
 				isNuking: !state.isNuking,
 			};
 		default:
@@ -155,17 +169,114 @@ const dfmvReducer = (state, action) => {
 	}
 };
 
+const DBContext = createContext();
 const DFMVContext = createContext();
 
-export function DFMVProvider({ children }) {
+export function DBProvider({ children }) {
 	const [dbState, dbDispatch] = useReducer(dbReducer, dbReducerInitialState);
+	const dbRef = useRef(null);
+
+	useEffect(() => {
+		const initDb = async () => {
+			try {
+				const db = await Database.load("sqlite:dfiv.db");
+				await db.execute("PRAGMA journal_mode = WAL");
+				dbRef.current = db;
+			} catch (err) {
+				console.error("DB init failed ❌:", err);
+			}
+		};
+		initDb();
+
+		return () => {
+			if (dbRef.current) {
+				dbRef.current.close().catch(console.error);
+			}
+		};
+	}, []);
+
+	const startImport = async (folderPath) => {
+		dbDispatch({ type: "START_IMPORT" });
+
+		const unlisten = await listen("import-progress", (event) => {
+			const { totalFound, processed } = event.payload;
+
+			dbDispatch({
+				type: "IMPORT_PROGRESS",
+				payload: {
+					inserted: processed,
+					total: totalFound,
+					percent: Math.round((processed / totalFound) * 100),
+				},
+			});
+		});
+
+		try {
+			const totalImported = await invoke("import_directory", {
+				path: folderPath,
+			});
+
+			dbDispatch({
+				type: "IMPORT_SUCCESS",
+				payload: { inserted: totalImported, total: totalImported },
+			});
+		} catch (error) {
+			console.error("Import failed:", error);
+			dbDispatch({
+				type: "IMPORT_FAILURE",
+				payload: error,
+			});
+		} finally {
+			unlisten();
+		}
+	};
+
+	const startRemove = async (item, itemType) => {
+		try {
+			await invoke("remove", { item, itemType });
+			dbDispatch({ type: "REMOVE_SUCCESS", payload: { item, itemType } });
+		} catch (error) {
+			console.error("DB remove failed:", err);
+			dbDispatch({ type: "REMOVE_FAILURE", payload: error });
+		}
+	};
+
+	const startNukeDb = async () => {
+		try {
+			dbDispatch({ type: "NUKE_DB" });
+			await invoke("nuke_db");
+			await new Promise((resolve) => setTimeout(resolve, 5000));
+		} catch (error) {
+			console.error("DB nuke failed:", error);
+		} finally {
+			dbDispatch({ type: "NUKE_DB" });
+		}
+	};
+
+	return (
+		<DBContext.Provider
+			value={{
+				// reducers
+				dbState,
+				dbDispatch,
+				// refs
+				dbRef,
+				// commands
+				startImport,
+				startRemove,
+				startNukeDb,
+			}}
+		>
+			{children}
+		</DBContext.Provider>
+	);
+}
+
+export function DFMVProvider({ children }) {
 	const [dfmvState, dfmvDispatch] = useReducer(
 		dfmvReducer,
 		dfmvReducerInitialState,
 	);
-
-	const dbRef = useRef(null);
-	const dbWorkerRef = useRef(null);
 
 	const IMAGE_TYPES = [
 		"jpg",
@@ -183,102 +294,22 @@ export function DFMVProvider({ children }) {
 	const VIDEO_TYPES = ["mp4", "webm", "mov", "avi", "mkv"];
 
 	useEffect(() => {
-		const init = async () => {
-			try {
-				const db = await Database.load("sqlite:dfiv.db");
-				await db.execute("PRAGMA journal_mode = WAL");
-				dbRef.current = db;
-				const allDrives = await invoke("get_all_drives");
-				dfmvDispatch({
-					type: "SET_DRIVES",
-					payload: allDrives,
-				});
-				dbWorkerRef.current = new DbWorker();
-				dbWorkerRef.current.onmessage = async (e) => {
-					const { type, payload } = e.data;
-
-					if (type === "NEED_DB_EXECUTE") {
-						const { query, params } = payload;
-						console.log("query", query);
-						console.log("params", params);
-						await dbRef.current.execute(query, params);
-						dbWorkerRef.current.postMessage({ type: "EXECUTE_DONE" });
-					}
-
-					if (type === "PROGRESS") {
-						dbDispatch({
-							type: "IMPORT_PROGRESS",
-							payload,
-						});
-					}
-
-					if (type === "COMPLETE") {
-						dbDispatch({
-							type: "IMPORT_SUCCESS",
-							payload,
-						});
-					}
-
-					if (type === "ERROR") {
-						dbDispatch({
-							type: "IMPORT_FAILURE",
-							payload: payload.error,
-						});
-					}
-
-					if (type === "NEED_NUKE_DB") {
-						await dbRef.current.execute("DELETE FROM media");
-						dbDispatch({ type: "NUKE_DB" });
-					}
-				};
-			} catch (err) {
-				console.error("init failed ❌:", err);
-			}
+		const initDrives = async () => {
+			const allDrives = await invoke("get_all_drives");
+			dfmvDispatch({
+				type: "SET_DRIVES",
+				payload: allDrives,
+			});
 		};
-		init();
-
-		return () => {
-			dbWorkerRef.current?.terminate();
-		};
+		initDrives();
 	}, []);
-
-	const startImport = (files) => {
-		dbDispatch({ type: "START_IMPORT" });
-		dbWorkerRef.current.postMessage({
-			type: "START_IMPORT",
-			payload: { files },
-		});
-	};
-
-	const startRemove = (item, type) => {
-		dbWorkerRef.current.postMessage({
-			type: "START_REMOVE",
-			payload: { item, type },
-		});
-	};
-	const startNukeDb = async () => {
-		dbDispatch({ type: "NUKE_DB" });
-		setTimeout(
-			() => dbWorkerRef.current.postMessage({ type: "NUKE_DB" }),
-			5000,
-		);
-	};
 
 	return (
 		<DFMVContext.Provider
 			value={{
 				// reducers
-				dbState,
-				dbDispatch,
 				dfmvState,
 				dfmvDispatch,
-				// refs
-				dbRef,
-				dbWorkerRef,
-				// commands
-				startImport,
-				startRemove,
-				startNukeDb,
 				// constants
 				IMAGE_TYPES,
 				AUDIO_TYPES,
@@ -288,6 +319,10 @@ export function DFMVProvider({ children }) {
 			{children}
 		</DFMVContext.Provider>
 	);
+}
+
+export function useDBContext() {
+	return useContext(DBContext);
 }
 
 export function useDFMVContext() {
