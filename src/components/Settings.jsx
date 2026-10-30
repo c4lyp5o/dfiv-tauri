@@ -1,26 +1,10 @@
-import { useMemo } from "react";
-import { useDBContext, useDFMVContext } from "../context/DFMVContext";
-import useDb from "../hooks/useDb";
+import { useMediaStats } from "../hooks/useMediaQuery";
+
+import { useDBContext } from "../context/DFMVContext";
 
 export default function Settings() {
 	const { dbState, startNukeDb } = useDBContext();
-	const { IMAGE_TYPES, AUDIO_TYPES, VIDEO_TYPES } = useDFMVContext();
-
-	const { data: currentFiles = [], mutate } = useDb(5000);
-
-	const { totalSize, counts } = useMemo(() => {
-		const counts = { images: 0, audios: 0, videos: 0 };
-		let totalSize = 0;
-
-		for (const file of currentFiles) {
-			totalSize += file.size;
-			if (IMAGE_TYPES.includes(file.file_type)) counts.images++;
-			else if (AUDIO_TYPES.includes(file.file_type)) counts.audios++;
-			else if (VIDEO_TYPES.includes(file.file_type)) counts.videos++;
-		}
-
-		return { totalSize, counts };
-	}, [currentFiles, IMAGE_TYPES, AUDIO_TYPES, VIDEO_TYPES]);
+	const { data: stats, mutate } = useMediaStats();
 
 	const handleNukeDatabase = async () => {
 		// if (
@@ -30,14 +14,9 @@ export default function Settings() {
 		// )
 		// 	return;
 
-		try {
-			startNukeDb();
-			console.log("Database nuked successfully");
-		} catch (error) {
-			console.error("Error nuking db:", error);
-		} finally {
-			mutate();
-		}
+		// startNukeDb reports failures through dbState; refresh stats once it settles
+		await startNukeDb();
+		mutate();
 	};
 
 	const formatBytes = (bytes) => {
@@ -60,30 +39,32 @@ export default function Settings() {
 						<div className="flex justify-between">
 							<dt className="text-slate-600">Items</dt>
 							<dd className="font-medium text-slate-800">
-								{currentFiles.length}
+								{stats?.total_count ?? 0}
 							</dd>
 						</div>
-
 						<div className="flex justify-between">
 							<dt className="text-slate-600">Size</dt>
 							<dd className="font-medium text-slate-800">
-								{formatBytes(totalSize)}
+								{formatBytes(stats?.total_size)}
 							</dd>
 						</div>
-
 						<div className="flex justify-between">
 							<dt className="text-slate-600">Images</dt>
-							<dd className="font-medium text-slate-800">{counts.images}</dd>
+							<dd className="font-medium text-slate-800">
+								{stats?.image_count ?? 0}
+							</dd>
 						</div>
-
 						<div className="flex justify-between">
 							<dt className="text-slate-600">Audios</dt>
-							<dd className="font-medium text-slate-800">{counts.audios}</dd>
+							<dd className="font-medium text-slate-800">
+								{stats?.audio_count ?? 0}
+							</dd>
 						</div>
-
 						<div className="flex justify-between">
 							<dt className="text-slate-600">Videos</dt>
-							<dd className="font-medium text-slate-800">{counts.videos}</dd>
+							<dd className="font-medium text-slate-800">
+								{stats?.video_count ?? 0}
+							</dd>
 						</div>
 					</dl>
 				</div>
