@@ -183,7 +183,7 @@ export const dfmvReducer = (state, action) => {
 	}
 };
 
-const IMAGE_TYPES = [
+export const IMAGE_TYPES = [
 	"jpg",
 	"jpeg",
 	"png",
@@ -195,8 +195,16 @@ const IMAGE_TYPES = [
 	"avif",
 	"heic",
 ];
-const AUDIO_TYPES = ["mp3", "wav", "ogg", "flac", "aac"];
-const VIDEO_TYPES = ["mp4", "webm", "mov", "avi", "mkv"];
+export const AUDIO_TYPES = ["mp3", "wav", "ogg", "flac", "aac"];
+export const VIDEO_TYPES = ["mp4", "webm", "mov", "avi", "mkv"];
+
+/** "image" | "audio" | "video" for a file extension, or null if unsupported. */
+export function mediaKind(type) {
+	if (IMAGE_TYPES.includes(type)) return "image";
+	if (AUDIO_TYPES.includes(type)) return "audio";
+	if (VIDEO_TYPES.includes(type)) return "video";
+	return null;
+}
 
 const DBContext = createContext();
 const DFMVStateContext = createContext();
@@ -246,9 +254,11 @@ export function DBProvider({ children }) {
 		try {
 			await invoke("remove", { item, itemType });
 			dbDispatch({ type: "REMOVE_SUCCESS", payload: { item, itemType } });
+			return true;
 		} catch (error) {
 			console.error("DB remove failed:", error);
 			dbDispatch({ type: "REMOVE_FAILURE", payload: error });
+			return false;
 		}
 	}, []);
 

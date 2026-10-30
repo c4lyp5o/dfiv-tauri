@@ -6,11 +6,12 @@ A fast, cross-platform desktop media viewer built with React, Tauri, and SQLite.
 
 ## Features
 
-- **File Explorer:** Browse local drives, mounted volumes and your home folder with keyboard or mouse. Back/forward history, auto-refresh, hidden dotfiles.
-- **Media Library:** Import a folder tree into a local SQLite database, then filter by images/audio/video and search by name.
-- **Media Preview:** Zoom and pan images, play audio, and play video with hardware decoding via libmpv (seek, volume, pixelated "privacy" mode).
-- **Info & Delete:** Options panel for file info and deletion.
-- **Library stats:** Item counts and total size in Settings, plus import progress and a one-click database reset.
+- **File Explorer:** Browse local drives, mounted volumes and your home folder with keyboard (↑ ↓ Enter) or mouse. Back/forward history, file sizes, auto-refresh, hidden dotfiles.
+- **Media Library:** Right-click a folder → *Add to library* to import it into a local SQLite database, then switch between Images / Audio / Video tabs and search by name.
+- **Media Preview:** Images open fitted to the window; scroll to zoom, drag to pan, double-click to reset. Audio plays in a now-playing card; video plays through libmpv with hardware decoding (seek, volume, pixelated "privacy" mode).
+- **File actions:** Floating toolbar with image details and a two-step delete (from disk in Explorer, from the library in Library).
+- **Dark, resizable layout:** Drag the sidebar edge (or focus it and use ← →) to resize; the width is remembered.
+- **Settings:** Library stats, live import progress, and a confirmed library reset.
 - **Cross-Platform:** Windows, macOS, and Linux.
 
 Supported formats: `jpg jpeg png gif bmp webp tiff svg avif heic` · `mp3 wav ogg flac aac` · `mp4 webm mov avi mkv`.

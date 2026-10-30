@@ -1,66 +1,82 @@
-import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
+import { useCallback, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { convertFileSrc } from "@tauri-apps/api/core";
+import {
+	Film,
+	Image as ImageIcon,
+	LibraryBig,
+	Music,
+	Search,
+	SearchX,
+	X,
+} from "lucide-react";
 
-import { useDBContext, useDFMVContext } from "../../context/DFMVContext";
+import {
+	AUDIO_TYPES,
+	IMAGE_TYPES,
+	VIDEO_TYPES,
+	useDBContext,
+	useDFMVContext,
+} from "../../context/DFMVContext";
+import { useToast } from "../../context/ToastContext";
 
-import { useMediaByType, useMediaSearch } from "../../hooks/useMediaQuery";
+import {
+	useMediaByType,
+	useMediaSearch,
+	useMediaStats,
+	useRevalidateMedia,
+} from "../../hooks/useMediaQuery";
 import useDebounce from "../../hooks/useDebounce";
+import { formatCount } from "../../utils/format";
 
 import ContextMenu from "../ContextMenu";
+import { EmptyState, FileRow, Spinner } from "../ui";
 
-const VirtListRowComponent = memo(
-	({ index, sorted, icon, style, selectedPath, onSelect, onContextMenu }) => {
-		return (
-			<li
-				style={style}
-				onContextMenu={(e) => {
-					e.preventDefault();
-					onContextMenu(e, sorted[index]);
-				}}
-				title={sorted[index].path}
-			>
-				<button
-					type="button"
-					className={`flex w-full items-center rounded-md text-left text-sm transition-colors duration-150
-          ${
-						selectedPath === sorted[index].path
-							? "bg-blue-100 font-medium text-blue-800"
-							: "text-slate-700 hover:bg-slate-200"
-					}`}
-					onClick={() => onSelect(sorted[index], index)}
-				>
-					<span className="w-5 text-center">{icon}</span>
-					<span className="text-sm truncate">{sorted[index].name}</span>
-				</button>
-			</li>
-		);
+const ROW_HEIGHT = 33;
+const CLOSED_MENU = { x: 0, y: 0, file: null };
+const NAV_KEYS = ["ArrowDown", "ArrowUp", "Enter"];
+
+const CATEGORIES = [
+	{
+		id: "images",
+		label: "Images",
+		noun: "images",
+		icon: ImageIcon,
+		types: IMAGE_TYPES,
+		statKey: "image_count",
 	},
-);
+	{
+		id: "audios",
+		label: "Audio",
+		noun: "tracks",
+		icon: Music,
+		types: AUDIO_TYPES,
+		statKey: "audio_count",
+	},
+	{
+		id: "videos",
+		label: "Video",
+		noun: "videos",
+		icon: Film,
+		types: VIDEO_TYPES,
+		statKey: "video_count",
+	},
+];
 
-const VirtList = ({ mediaFiles, types, icon, isLoading }) => {
-	const parentRef = useRef(null);
-	const { dfmvDispatch, dfmvState } = useDFMVContext();
-
-	const sorted = useMemo(() => {
-		return mediaFiles
-			.filter((f) => Array.isArray(types) && types.includes(f.file_type))
-			.sort((a, b) => {
-				if (a.is_directory && !b.is_directory) return -1;
-				if (!a.is_directory && b.is_directory) return 1;
-				return a.name.localeCompare(b.name);
-			});
-	}, [mediaFiles, types]);
+function MediaList({ files, isLoading, emptyState }) {
+	const scrollRef = useRef(null);
+	const { dfmvState, dfmvDispatch } = useDFMVContext();
 
 	const virtualizer = useVirtualizer({
-		count: sorted.length,
-		getScrollElement: () => parentRef.current,
-		estimateSize: () => 25,
+		count: files.length,
+		getScrollElement: () => scrollRef.current,
+		estimateSize: () => ROW_HEIGHT,
+		overscan: 12,
 	});
 
-	const selectedPath = dfmvState.selectedMediaFilename?.path;
+	const selectedPath = dfmvState.selectedMediaFilename.path;
 
-	const onSelect = useCallback(
+	const select = useCallback(
 		(file, index) => {
 			dfmvDispatch({
 				type: "SET_INFO_BOX",
@@ -83,383 +99,219 @@ const VirtList = ({ mediaFiles, types, icon, isLoading }) => {
 		[dfmvDispatch],
 	);
 
-	const onContextMenu = useCallback(
-		(e, file) => {
-			dfmvDispatch({
-				type: "SET_CONTEXT_MENU",
-				payload: { x: e.clientX, y: e.clientY, file },
-			});
-		},
-		[dfmvDispatch],
-	);
+	const handleKeyDown = (e) => {
+		if (!files.length || !NAV_KEYS.includes(e.key)) return;
+		e.preventDefault();
+		const current = files.findIndex((f) => f.path === selectedPath);
 
-	if (isLoading) {
-		return (
-			<div className="flex flex-1 items-center justify-center py-8">
-				<svg
-					className="h-6 w-6 animate-spin text-blue-500"
-					xmlns="http://www.w3.org/2000/svg"
-					fill="none"
-					viewBox="0 0 24 24"
-				>
-					<title>Loading...</title>
-					<circle
-						className="opacity-25"
-						cx="12"
-						cy="12"
-						r="10"
-						stroke="currentColor"
-						strokeWidth="4"
-					/>
-					<path
-						className="opacity-75"
-						fill="currentColor"
-						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-					/>
-				</svg>
-				<span className="ml-2 text-sm text-slate-500">Loading...</span>
-			</div>
-		);
-	}
+		if (e.key === "Enter") {
+			if (current >= 0) select(files[current], current);
+			return;
+		}
 
-	if (sorted.length === 0) {
-		return (
-			<div className="flex flex-1 items-center justify-center py-8">
-				<span className="text-sm text-slate-400">No files found</span>
-			</div>
-		);
-	}
+		const next =
+			e.key === "ArrowDown"
+				? Math.min(current + 1, files.length - 1)
+				: Math.max(current - 1, 0);
+		select(files[next], next);
+		virtualizer.scrollToIndex(next);
+	};
+
+	if (isLoading) return <Spinner />;
+	if (files.length === 0) return emptyState;
 
 	return (
-		<div ref={parentRef} className="flex-1 overflow-auto">
+		// biome-ignore lint/a11y/noStaticElementInteractions: keyboard navigation for the media list
+		<div
+			ref={scrollRef}
+			onKeyDown={handleKeyDown}
+			// biome-ignore lint/a11y/noNoninteractiveTabindex: focus target for keyboard navigation
+			tabIndex={0}
+			className="min-h-0 flex-1 overflow-y-auto py-1.5 outline-none"
+		>
 			<ul
-				style={{
-					height: virtualizer.getTotalSize(),
-					position: "relative",
-					width: "100%",
-				}}
+				className="relative mx-2"
+				style={{ height: virtualizer.getTotalSize() }}
 			>
-				{virtualizer.getVirtualItems().map((vRow) => (
-					<VirtListRowComponent
-						key={vRow.key}
-						index={vRow.index}
-						sorted={sorted}
-						icon={icon}
-						selectedPath={selectedPath}
-						onSelect={onSelect}
-						onContextMenu={onContextMenu}
-						style={{
-							position: "absolute",
-							top: vRow.start,
-							height: vRow.size,
-							width: "100%",
-						}}
-					/>
-				))}
+				{virtualizer.getVirtualItems().map((row) => {
+					const file = files[row.index];
+					return (
+						<FileRow
+							key={file.path}
+							index={row.index}
+							name={file.name}
+							type={file.file_type}
+							title={file.path}
+							isSelected={file.path === selectedPath}
+							onClick={() => select(file, row.index)}
+							onContextMenu={(e) => {
+								e.preventDefault();
+								dfmvDispatch({
+									type: "SET_CONTEXT_MENU",
+									payload: { x: e.clientX, y: e.clientY, file },
+								});
+							}}
+							style={{
+								position: "absolute",
+								top: 0,
+								left: 0,
+								width: "100%",
+								height: row.size,
+								transform: `translateY(${row.start}px)`,
+							}}
+						/>
+					);
+				})}
 			</ul>
 		</div>
 	);
-};
+}
 
 export default function Sidebar() {
 	const { startRemove } = useDBContext();
-	const { dfmvState, dfmvDispatch, IMAGE_TYPES, AUDIO_TYPES, VIDEO_TYPES } =
-		useDFMVContext();
+	const { dfmvState, dfmvDispatch } = useDFMVContext();
+	const { showToast } = useToast();
+	const revalidateMedia = useRevalidateMedia();
 
+	const [categoryId, setCategoryId] = useState(CATEGORIES[0].id);
 	const [searchQuery, setSearchQuery] = useState("");
-	const [openAccordion, setOpenAccordion] = useState(null);
 
 	const debouncedSearchQuery = useDebounce(searchQuery, 200);
 	const isSearching = !!debouncedSearchQuery;
+	const category = CATEGORIES.find((c) => c.id === categoryId);
 
-	const types =
-		openAccordion === "images"
-			? IMAGE_TYPES
-			: openAccordion === "audios"
-				? AUDIO_TYPES
-				: openAccordion === "videos"
-					? VIDEO_TYPES
-					: [];
-
+	const { data: stats } = useMediaStats();
 	const { data: browseFiles = [], isLoading: isBrowseLoading } = useMediaByType(
-		types,
-		!!openAccordion && !isSearching,
+		category.types,
+		!isSearching,
 	);
-
 	const { data: searchFiles = [], isLoading: isSearchLoading } = useMediaSearch(
-		types,
+		category.types,
 		debouncedSearchQuery,
-		!!openAccordion && isSearching,
+		isSearching,
 	);
 
 	const mediaFiles = isSearching ? searchFiles : browseFiles;
 	const isLoading = isSearching ? isSearchLoading : isBrowseLoading;
 
-	const menuRef = useRef();
-	const scrollableContainerRef = useRef();
-
-	useEffect(() => {
-		const handleClick = (e) => {
-			if (menuRef.current && !menuRef.current.contains(e.target)) {
-				dfmvDispatch({
-					type: "SET_CONTEXT_MENU",
-					payload: { x: 0, y: 0, file: null },
-				});
-			}
-		};
-		const handleEsc = (e) => {
-			if (e.key === "Escape") {
-				dfmvDispatch({
-					type: "SET_CONTEXT_MENU",
-					payload: { x: 0, y: 0, file: null },
-				});
-			}
-		};
-		document.addEventListener("click", handleClick);
-		document.addEventListener("keydown", handleEsc);
-		return () => {
-			document.removeEventListener("click", handleClick);
-			document.removeEventListener("keydown", handleEsc);
-		};
-	}, [dfmvDispatch]);
-
-	const toggleAccordion = (type) => {
+	const selectCategory = (id) => {
+		setCategoryId(id);
 		setSearchQuery("");
-		setOpenAccordion((prev) => (prev === type ? null : type));
-		scrollToTop();
 	};
 
-	const scrollToTop = () => {
-		if (scrollableContainerRef.current) {
-			scrollableContainerRef.current.scrollTo({
-				top: 0,
-				behavior: "smooth",
-			});
-		}
+	const menuFile = dfmvState.contextMenu.file;
+	const closeMenu = useCallback(
+		() => dfmvDispatch({ type: "SET_CONTEXT_MENU", payload: CLOSED_MENU }),
+		[dfmvDispatch],
+	);
+
+	const handleRemove = async () => {
+		closeMenu();
+		const isRemoved = await startRemove(menuFile.path, "file");
+		revalidateMedia();
+		if (isRemoved) showToast(`Removed ${menuFile.name} from library`, "success");
+		else showToast(`Couldn't remove ${menuFile.name}`, "error");
 	};
 
-	const handleSearch = (e) => setSearchQuery(e.target.value);
+	const totalInCategory = stats?.[category.statKey] ?? 0;
+	const summary = isSearching ? (
+		<>
+			{formatCount(mediaFiles.length)}{" "}
+			{mediaFiles.length === 1 ? "match" : "matches"} for{" "}
+			<span className="normal-case">“{debouncedSearchQuery}”</span>
+		</>
+	) : (
+		`${formatCount(totalInCategory)} ${category.noun}`
+	);
 
-	const handleKeyDown = (e) => {
-		if (!mediaFiles.length) return;
-
-		dfmvDispatch({
-			type: "SET_INFO_BOX",
-			payload: { visible: false, content: "" },
-		});
-
-		const idx = dfmvState.selectedMediaFilename.index ?? 0;
-
-		if (e.key === "ArrowDown") {
-			e.preventDefault();
-			const nextIdx = Math.min(idx + 1, mediaFiles.length - 1);
-			const file = mediaFiles[nextIdx];
-			dfmvDispatch({
-				type: "SET_SELECTED_MEDIA_FILENAME",
-				payload: {
-					name: file.name,
-					path: file.path,
-					type: file.file_type,
-					index: nextIdx,
-				},
-			});
-
-			if (!file.is_directory) {
-				dfmvDispatch({
-					type: "SET_SELECTED_MEDIA",
-					payload: convertFileSrc(file.path),
-				});
-			} else {
-				dfmvDispatch({
-					type: "SET_SELECTED_MEDIA",
-					payload: null,
-				});
-			}
-		} else if (e.key === "ArrowUp") {
-			e.preventDefault();
-			const prevIdx = Math.max(idx - 1, 0);
-			const file = mediaFiles[prevIdx];
-			dfmvDispatch({
-				type: "SET_SELECTED_MEDIA_FILENAME",
-				payload: {
-					name: file.name,
-					path: file.path,
-					type: file.file_type,
-					index: prevIdx,
-				},
-			});
-			if (!file.is_directory) {
-				dfmvDispatch({
-					type: "SET_SELECTED_MEDIA",
-					payload: convertFileSrc(file.path),
-				});
-			} else {
-				dfmvDispatch({
-					type: "SET_SELECTED_MEDIA",
-					payload: null,
-				});
-			}
-		} else if (e.key === "Enter") {
-			e.preventDefault();
-			const file = mediaFiles[idx];
-			if (file) {
-				if (file.is_directory) {
-					openDir(file.path);
-				} else {
-					dfmvDispatch({
-						type: "SET_SELECTED_MEDIA",
-						payload: convertFileSrc(file.path),
-					});
-				}
-			}
-		}
-	};
+	const emptyState = isSearching ? (
+		<EmptyState
+			icon={SearchX}
+			title="No matches"
+			hint={`Nothing in ${category.label.toLowerCase()} matches “${debouncedSearchQuery}”.`}
+		/>
+	) : (
+		<EmptyState
+			icon={LibraryBig}
+			title={`No ${category.noun} yet`}
+			hint="In Explorer, right-click a folder and choose “Add to library”."
+		/>
+	);
 
 	return (
-		// biome-ignore lint/a11y/noStaticElementInteractions: false
-		<section
-			onKeyDown={handleKeyDown}
-			// biome-ignore lint/a11y/noNoninteractiveTabindex: false
-			tabIndex={0}
-			className="flex flex-col h-full"
-		>
-			{/* Header */}
-			<div className="flex items-center justify-between border-b border-slate-200 p-2">
-				{/* Search Input */}
-				<input
-					type="text"
-					placeholder="Search"
-					value={searchQuery}
-					disabled={!openAccordion}
-					onChange={handleSearch}
-					className={`flex-1 rounded border px-2 py-1 text-sm ${
-						!openAccordion
-							? "bg-gray-200 text-gray-400 cursor-not-allowed"
-							: "bg-white text-black"
-					}`}
+		<section aria-label="Media library" className="flex min-h-0 flex-1 flex-col">
+			<div className="space-y-2 px-2 pb-2">
+				<div className="relative flex items-center">
+					<Search
+						size={14}
+						className="pointer-events-none absolute left-2.5 text-fg-subtle"
+					/>
+					<input
+						type="search"
+						placeholder={`Search ${category.label.toLowerCase()}`}
+						aria-label="Search library"
+						value={searchQuery}
+						onChange={(e) => setSearchQuery(e.target.value)}
+						className="h-8 w-full rounded-md border border-line bg-surface-2 pr-8 pl-8 text-[13px] text-fg outline-none transition-colors placeholder:text-fg-subtle hover:border-fg-subtle/60 focus:border-accent [&::-webkit-search-cancel-button]:hidden"
+					/>
+					{searchQuery && (
+						<button
+							type="button"
+							aria-label="Clear search"
+							onClick={() => setSearchQuery("")}
+							className="absolute right-1.5 rounded p-1 text-fg-subtle hover:bg-surface-3 hover:text-fg"
+						>
+							<X size={12} />
+						</button>
+					)}
+				</div>
+
+				<div role="tablist" aria-label="Media type" className="grid grid-cols-3 gap-1">
+					{CATEGORIES.map(({ id, label, icon: Icon, statKey }) => {
+						const isActive = id === categoryId;
+						return (
+							<button
+								key={id}
+								type="button"
+								role="tab"
+								aria-selected={isActive}
+								onClick={() => selectCategory(id)}
+								className={`flex flex-col items-center gap-0.5 rounded-md border py-1.5 text-[11px] font-medium transition-colors ${
+									isActive
+										? "border-accent/40 bg-accent/10 text-fg"
+										: "border-line text-fg-subtle hover:bg-surface-2 hover:text-fg"
+								}`}
+							>
+								<Icon size={14} className={isActive ? "text-accent" : ""} />
+								<span>{label}</span>
+								<span className="tabular-nums text-[10px] text-fg-subtle">
+									{formatCount(stats?.[statKey])}
+								</span>
+							</button>
+						);
+					})}
+				</div>
+			</div>
+
+			<div className="border-t border-line px-3 pt-2 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
+				{summary}
+			</div>
+
+			<MediaList
+				files={mediaFiles}
+				isLoading={isLoading}
+				emptyState={emptyState}
+			/>
+
+			{menuFile && (
+				<ContextMenu
+					x={dfmvState.contextMenu.x}
+					y={dfmvState.contextMenu.y}
+					title={menuFile.name}
+					onClose={closeMenu}
+					onRemove={handleRemove}
 				/>
-				{/* Mode Selector */}
-				<button
-					type="button"
-					title="Change Mode"
-					onClick={() => {
-						dfmvDispatch({ type: "TOGGLE_APP_MODE" });
-						dfmvDispatch({ type: "RESET_MEDIA_AND_INFO" });
-					}}
-					className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
-				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						strokeWidth={1.5}
-						stroke="currentColor"
-						className="h-5 w-5"
-					>
-						<title>Change To Explorer Mode</title>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							d="M3.75 5.25h16.5M3.75 12h16.5M3.75 18.75h16.5"
-						/>
-					</svg>
-				</button>
-			</div>
-
-			{/* Accordions */}
-			<div
-				ref={scrollableContainerRef}
-				className="flex-1 flex flex-col min-h-0 overflow-y-auto"
-			>
-				{/* Images */}
-				<div>
-					<button
-						type="button"
-						className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-200"
-						onClick={() => toggleAccordion("images")}
-					>
-						<span>Images</span>
-						<span>{openAccordion === "images" ? "−" : "+"}</span>
-					</button>
-					{openAccordion === "images" && (
-						<VirtList
-							mediaFiles={mediaFiles}
-							types={IMAGE_TYPES}
-							icon="🖼️"
-							isLoading={isLoading}
-						/>
-					)}
-				</div>
-
-				{/* Audios */}
-				<div>
-					<button
-						type="button"
-						className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-200"
-						onClick={() => toggleAccordion("audios")}
-					>
-						<span>Audios</span>
-						<span>{openAccordion === "audios" ? "−" : "+"}</span>
-					</button>
-					{openAccordion === "audios" && (
-						<VirtList
-							mediaFiles={mediaFiles}
-							types={AUDIO_TYPES}
-							icon="🎵"
-							isLoading={isLoading}
-						/>
-					)}
-				</div>
-
-				{/* Videos */}
-				<div>
-					<button
-						type="button"
-						className="flex w-full items-center justify-between px-3 py-2 text-sm font-semibold uppercase tracking-wider text-slate-600 hover:bg-slate-200"
-						onClick={() => toggleAccordion("videos")}
-					>
-						<span>Videos</span>
-						<span>{openAccordion === "videos" ? "−" : "+"}</span>
-					</button>
-					{openAccordion === "videos" && (
-						<VirtList
-							mediaFiles={mediaFiles}
-							types={VIDEO_TYPES}
-							icon="🎞️"
-							isLoading={isLoading}
-						/>
-					)}
-				</div>
-
-				{dfmvState.contextMenu.file && (
-					<div ref={menuRef}>
-						<ContextMenu
-							appMode={dfmvState.appMode}
-							x={dfmvState.contextMenu.x}
-							y={dfmvState.contextMenu.y}
-							onClose={() =>
-								dfmvDispatch({
-									type: "SET_CONTEXT_MENU",
-									payload: { x: 0, y: 0, file: null },
-								})
-							}
-							onRemove={() => {
-								try {
-									startRemove(dfmvState.contextMenu.file.path, "file");
-								} catch (err) {
-									console.error("DB remove failed:", err);
-								} finally {
-									mutate();
-									dfmvDispatch({
-										type: "SET_CONTEXT_MENU",
-										payload: { x: 0, y: 0, file: null },
-									});
-								}
-							}}
-						/>
-					</div>
-				)}
-			</div>
+			)}
 		</section>
 	);
 }
