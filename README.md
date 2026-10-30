@@ -48,7 +48,7 @@ Video is rendered by libmpv via `tauri-plugin-libmpv`, which loads `libmpv-wrapp
 - **macOS:** `brew install mpv`, then `scripts/fetch-libmpv-wrapper.sh`.
 - **Linux:** `sudo apt install libmpv-dev` (or your distro's equivalent), then `scripts/fetch-libmpv-wrapper.sh`.
 
-The script downloads the pinned [libmpv-wrapper](https://github.com/nini22P/libmpv-wrapper/releases) release for your OS/CPU, verifies its SHA-256, and puts it in `src-tauri/lib/`. Pass a platform (`linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `macos-x86_64`) to override detection.
+On macOS and Linux this step is required before building: the bundle config packages only that platform's wrapper (not the 94 MB Windows DLL). The script downloads the pinned [libmpv-wrapper](https://github.com/nini22P/libmpv-wrapper/releases) release for your OS/CPU, verifies its SHA-256, and puts it in `src-tauri/lib/`. Pass a platform (`linux-x86_64`, `linux-aarch64`, `macos-aarch64`, `macos-x86_64`) to override detection.
 
 ### Run
 
