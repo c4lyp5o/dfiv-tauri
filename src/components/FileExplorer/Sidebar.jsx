@@ -1,22 +1,30 @@
 import { useEffect, useRef } from "react";
-import { convertFileSrc, invoke } from "@tauri-apps/api/core";
-import { useDFMVContext } from "../../context/DFMVContext";
+import { convertFileSrc } from "@tauri-apps/api/core";
+import {
+	ChevronDown,
+	ChevronLeft,
+	ChevronRight,
+	FolderOpen,
+	HardDrive,
+	TriangleAlert,
+} from "lucide-react";
+
+import { useDBContext, useDFMVContext } from "../../context/DFMVContext";
 import { useToast } from "../../context/ToastContext";
+
 import useFolder from "../../hooks/useFolder";
+import { baseName, formatBytes } from "../../utils/format";
 
 import ContextMenu from "../ContextMenu";
+import { EmptyState, FileRow, IconButton, Spinner } from "../ui";
+
+const CLOSED_MENU = { x: 0, y: 0, file: null };
+const HIDDEN_INFO = { visible: false, content: "" };
+const NAV_KEYS = ["ArrowDown", "ArrowUp", "Enter"];
 
 export default function Sidebar() {
-	const {
-		dfmvState,
-		dfmvDispatch,
-		startImport,
-		startRemove,
-		IMAGE_TYPES,
-		AUDIO_TYPES,
-		VIDEO_TYPES,
-	} = useDFMVContext();
-
+	const { startImport, startRemove } = useDBContext();
+	const { dfmvState, dfmvDispatch } = useDFMVContext();
 	const { showToast } = useToast();
 
 	const {
@@ -25,35 +33,20 @@ export default function Sidebar() {
 		error,
 	} = useFolder(dfmvState.currentDir, 5000);
 
-	const menuRef = useRef();
+	const listRef = useRef(null);
+	const selectedPath = dfmvState.selectedMediaFilename.path;
+	const selectedIndex = currentFiles.findIndex((f) => f.path === selectedPath);
 
+	// Keep the keyboard selection in view
 	useEffect(() => {
-		const handleClick = (e) => {
-			if (menuRef.current && !menuRef.current.contains(e.target)) {
-				dfmvDispatch({
-					type: "SET_CONTEXT_MENU",
-					payload: { x: 0, y: 0, file: null },
-				});
-			}
-		};
-		const handleEsc = (e) => {
-			if (e.key === "Escape") {
-				dfmvDispatch({
-					type: "SET_CONTEXT_MENU",
-					payload: { x: 0, y: 0, file: null },
-				});
-			}
-		};
-		document.addEventListener("click", handleClick);
-		document.addEventListener("keydown", handleEsc);
-		return () => {
-			document.removeEventListener("click", handleClick);
-			document.removeEventListener("keydown", handleEsc);
-		};
-	}, [dfmvDispatch]);
+		listRef.current
+			?.querySelector(`[data-index="${selectedIndex}"]`)
+			?.scrollIntoView({ block: "nearest" });
+	}, [selectedIndex]);
 
 	const openDir = (dir, type) => {
 		dfmvDispatch({ type: "SET_CURRENT_DIR", payload: dir });
+		dfmvDispatch({ type: "RESET_MEDIA_AND_INFO" });
 		if (dfmvState.currentDir && type !== "drives") {
 			dfmvDispatch({
 				type: "SET_PREV_DIR",
@@ -90,335 +83,210 @@ export default function Sidebar() {
 		dfmvDispatch({ type: "RESET_MEDIA_AND_INFO" });
 	};
 
-	const handleKeyDown = (e) => {
-		if (!currentFiles.length) return;
-
+	const selectFile = (file, index) => {
 		dfmvDispatch({
-			type: "SET_INFO_BOX",
-			payload: { visible: false, content: "" },
+			type: "SET_SELECTED_MEDIA_FILENAME",
+			payload: {
+				name: file.name,
+				path: file.path,
+				type: file.file_type,
+				index,
+			},
 		});
+		dfmvDispatch({
+			type: "SET_SELECTED_MEDIA",
+			payload: file.is_directory ? null : convertFileSrc(file.path),
+		});
+	};
 
-		const idx = dfmvState.selectedMediaFilename.index ?? 0;
+	const handleClick = (file, index) => {
+		dfmvDispatch({ type: "SET_INFO_BOX", payload: HIDDEN_INFO });
+		if (file.is_directory) openDir(file.path);
+		else selectFile(file, index);
+	};
 
-		if (e.key === "ArrowDown") {
-			e.preventDefault();
-			const nextIdx = Math.min(idx + 1, currentFiles.length - 1);
-			const file = currentFiles[nextIdx];
-			dfmvDispatch({
-				type: "SET_SELECTED_MEDIA_FILENAME",
-				payload: {
-					name: file.name,
-					path: file.path,
-					type: file.file_type,
-					index: nextIdx,
-				},
-			});
-			if (!file.is_directory) {
-				dfmvDispatch({
-					type: "SET_SELECTED_MEDIA",
-					payload: convertFileSrc(file.path),
-				});
-			} else {
-				dfmvDispatch({
-					type: "SET_SELECTED_MEDIA",
-					payload: null,
-				});
-			}
-		} else if (e.key === "ArrowUp") {
-			e.preventDefault();
-			const prevIdx = Math.max(idx - 1, 0);
-			const file = currentFiles[prevIdx];
-			fmvDispatch({
-				type: "SET_SELECTED_MEDIA_FILENAME",
-				payload: {
-					name: file.name,
-					path: file.path,
-					type: file.file_type,
-					index: prevIdx,
-				},
-			});
-			if (!file.is_directory) {
-				dfmvDispatch({
-					type: "SET_SELECTED_MEDIA",
-					payload: convertFileSrc(file.path),
-				});
-			} else {
-				dfmvDispatch({
-					type: "SET_SELECTED_MEDIA",
-					payload: null,
-				});
-			}
-		} else if (e.key === "Enter") {
-			e.preventDefault();
-			const file = currentFiles[idx];
-			if (file) {
-				if (file.is_directory) {
-					openDir(file.path);
-				} else {
-					dfmvDispatch({
-						type: "SET_SELECTED_MEDIA",
-						payload: convertFileSrc(file.path),
-					});
-				}
-			}
+	const handleKeyDown = (e) => {
+		if (!currentFiles.length || !NAV_KEYS.includes(e.key)) return;
+		// Let the drive picker handle its own arrow keys
+		if (e.target.tagName === "SELECT") return;
+		e.preventDefault();
+		dfmvDispatch({ type: "SET_INFO_BOX", payload: HIDDEN_INFO });
+
+		if (e.key === "Enter") {
+			const file = currentFiles[selectedIndex];
+			if (file?.is_directory) openDir(file.path);
+			else if (file) selectFile(file, selectedIndex);
+			return;
 		}
+
+		const nextIndex =
+			e.key === "ArrowDown"
+				? Math.min(selectedIndex + 1, currentFiles.length - 1)
+				: Math.max(selectedIndex - 1, 0);
+		selectFile(currentFiles[nextIndex], nextIndex);
+	};
+
+	const menuFile = dfmvState.contextMenu.file;
+	const closeMenu = () =>
+		dfmvDispatch({ type: "SET_CONTEXT_MENU", payload: CLOSED_MENU });
+
+	const handleAddToLibrary = () => {
+		closeMenu();
+		startImport(menuFile.path);
+		showToast(`Importing ${menuFile.name}…`, "info");
+	};
+
+	const handleRemoveFromLibrary = async () => {
+		closeMenu();
+		const isRemoved = await startRemove(menuFile.path, "folder");
+		if (isRemoved) showToast(`Removed ${menuFile.name} from library`, "success");
+		else showToast(`Couldn't remove ${menuFile.name}`, "error");
+	};
+
+	const renderListing = () => {
+		if (!dfmvState.currentDir) {
+			return (
+				<EmptyState
+					icon={HardDrive}
+					title="Pick a drive to start browsing"
+					hint="Use ↑ ↓ to move through files and Enter to open folders."
+				/>
+			);
+		}
+		if (isLoading) return <Spinner />;
+		if (error) {
+			return (
+				<EmptyState
+					icon={TriangleAlert}
+					title="Couldn't read this folder"
+					hint={String(error)}
+				/>
+			);
+		}
+		if (currentFiles.length === 0) {
+			return (
+				<EmptyState
+					icon={FolderOpen}
+					title="No media here"
+					hint="Only folders and supported media files are shown."
+				/>
+			);
+		}
+		return (
+			<ul ref={listRef} className="space-y-px px-2 py-1.5">
+				{currentFiles.map((f, idx) => (
+					<FileRow
+						key={f.path}
+						index={idx}
+						name={f.name}
+						type={f.file_type}
+						isDirectory={f.is_directory}
+						meta={f.is_directory ? null : formatBytes(f.size)}
+						isSelected={f.path === selectedPath}
+						onClick={() => handleClick(f, idx)}
+						onContextMenu={(e) => {
+							e.preventDefault();
+							if (f.is_directory) {
+								dfmvDispatch({
+									type: "SET_CONTEXT_MENU",
+									payload: { x: e.clientX, y: e.clientY, file: f },
+								});
+							}
+						}}
+					/>
+				))}
+			</ul>
+		);
 	};
 
 	return (
-		// biome-ignore lint/a11y/noStaticElementInteractions: false
-		// biome-ignore lint/a11y/noNoninteractiveTabindex: false
-		<section onKeyDown={handleKeyDown} tabIndex={0}>
-			{/* Header */}
-			<div className="flex items-center justify-between border-b border-slate-200 p-2">
-				{/* Back Button */}
-				<button
-					type="button"
-					title="Back"
+		<section
+			onKeyDown={handleKeyDown}
+			// biome-ignore lint/a11y/noNoninteractiveTabindex: focus target for keyboard navigation
+			tabIndex={0}
+			aria-label="File explorer"
+			className="flex min-h-0 flex-1 flex-col outline-none"
+		>
+			<div className="flex items-center gap-1 px-2 pb-2">
+				<IconButton
+					label="Back"
 					onClick={goToPreviousDir}
 					disabled={dfmvState.prevDir.length === 0}
-					className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
 				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						strokeWidth={1.5}
-						stroke="currentColor"
-						className="h-5 w-5"
-					>
-						<title>Back</title>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							d="M15.75 19.5 8.25 12l7.5-7.5"
-						/>
-					</svg>
-				</button>
-
-				{/* Forward Button */}
-				<button
-					type="button"
-					title="Forward"
+					<ChevronLeft size={16} />
+				</IconButton>
+				<IconButton
+					label="Forward"
 					onClick={goToNextDir}
 					disabled={dfmvState.nextDir.length === 0}
-					className="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
 				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						strokeWidth={1.5}
-						stroke="currentColor"
-						className="h-5 w-5"
-					>
-						<title>Forward</title>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							d="m8.25 4.5 7.5 7.5-7.5 7.5"
-						/>
-					</svg>
-				</button>
+					<ChevronRight size={16} />
+				</IconButton>
 
-				{/* Drive Selector */}
-				<select
-					className="ml-2 rounded border border-slate-300 bg-white px-2 py-1 text-sm"
-					value={dfmvState.currentDrive}
-					onChange={async (e) => {
-						const dir = e.target.value;
-						if (dir) {
-							dfmvDispatch({ type: "SET_CURRENT_DRIVE", payload: dir });
-							await openDir(dir, "drives");
-						}
-					}}
-				>
-					<option value="" disabled>
-						Select Drive
-					</option>
-					{dfmvState?.allDrives.map((drive) => (
-						<option key={drive} value={drive}>
-							{drive}
-						</option>
-					))}
-				</select>
-
-				{/* Mode Selector */}
-				<button
-					type="button"
-					title="Change Mode"
-					onClick={() => {
-						dfmvDispatch({ type: "TOGGLE_APP_MODE" });
-						dfmvDispatch({ type: "RESET_ALL" });
-					}}
-					className="ml-auto flex h-8 w-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
-				>
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						fill="none"
-						viewBox="0 0 24 24"
-						strokeWidth={1.5}
-						stroke="currentColor"
-						className="h-5 w-5"
-					>
-						<title>Change To Media Mode</title>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							d="M4 6h4v4H4V6zm6 0h4v4h-4V6zm6 0h4v4h-4V6zM4 14h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"
-						/>
-					</svg>
-				</button>
-			</div>
-
-			{/* File & Directory Listing */}
-			<div className="flex-1 overflow-y-auto">
-				<h2 className="px-3 pt-3 pb-1 text-xs font-semibold uppercase tracking-wider text-slate-500">
-					{dfmvState.currentDir}
-				</h2>
-				{isLoading && (
-					<div className="px-3 text-xs text-slate-400">Loading...</div>
-				)}
-				{error && (
-					<div className="px-3 text-xs text-red-500">Failed to load folder</div>
-				)}
-				<ul className="p-1">
-					{currentFiles
-						.sort((a, b) => {
-							if (a.is_directory && !b.is_directory) return -1;
-							if (!a.is_directory && b.is_directory) return 1;
-							return a.name.localeCompare(b.name);
-						})
-						.map((f, idx) => (
-							<li
-								key={f.path}
-								onContextMenu={(e) => {
-									e.preventDefault();
-									if (f.is_directory) {
-										dfmvDispatch({
-											type: "SET_CONTEXT_MENU",
-											payload: { x: e.clientX, y: e.clientY, file: f },
-										});
-									}
-								}}
-								title={f.name}
-								className="cursor-default hover:bg-slate-100"
-							>
-								<button
-									type="button"
-									className={`flex w-full items-center rounded-md text-left text-sm transition-colors duration-150
-                ${
-									dfmvState.selectedMediaFilename.index === idx
-										? "bg-blue-100 font-medium text-blue-800"
-										: "text-slate-700 hover:bg-slate-200"
-								}`}
-									onClick={() => {
-										dfmvDispatch({
-											type: "SET_INFO_BOX",
-											payload: { visible: false, content: "" },
-										});
-										if (f.is_directory) {
-											openDir(f.path);
-										} else {
-											showToast(`File selected: ${f.name}`);
-											dfmvDispatch({
-												type: "SET_SELECTED_MEDIA",
-												payload: convertFileSrc(f.path),
-											});
-											dfmvDispatch({
-												type: "SET_SELECTED_MEDIA_FILENAME",
-												payload: {
-													name: f.name,
-													path: f.path,
-													type: f.file_type,
-													index: idx,
-												},
-											});
-										}
-									}}
-								>
-									<span className="w-5 text-center">
-										{f.is_directory
-											? "📁"
-											: IMAGE_TYPES.includes(f.file_type)
-												? "🖼️"
-												: AUDIO_TYPES.includes(f.file_type)
-													? "🎵"
-													: VIDEO_TYPES.includes(f.file_type)
-														? "🎞️"
-														: "📄"}
-									</span>
-									<span className="text-sm truncate">{f.name}</span>
-								</button>
-							</li>
-						))}
-				</ul>
-
-				{dfmvState.contextMenu.file && (
-					<div ref={menuRef}>
-						<ContextMenu
-							x={dfmvState.contextMenu.x}
-							y={dfmvState.contextMenu.y}
-							onClose={() =>
-								dfmvDispatch({
-									type: "SET_CONTEXT_MENU",
-									payload: { x: 0, y: 0, file: null },
-								})
+				<div className="relative ml-1 flex min-w-0 flex-1 items-center">
+					<HardDrive
+						size={14}
+						className="pointer-events-none absolute left-2.5 text-fg-subtle"
+					/>
+					<select
+						aria-label="Drive"
+						value={dfmvState.currentDrive}
+						onChange={(e) => {
+							const dir = e.target.value;
+							if (dir) {
+								dfmvDispatch({ type: "SET_CURRENT_DRIVE", payload: dir });
+								openDir(dir, "drives");
 							}
-							onAdd={async () => {
-								try {
-									console.log("Add", dfmvState.contextMenu.file);
-
-									const folderFiles = await invoke("read_folder_recursive", {
-										dir: dfmvState.contextMenu.file.path,
-									});
-
-									startImport(folderFiles);
-									// // Batch insert
-									// const values = folderFiles
-									// 	.map(() => "(?, ?, ?, ?, ?)")
-									// 	.join(", ");
-									// const params = folderFiles.flatMap((file) => [
-									// 	file.name,
-									// 	file.size,
-									// 	file.folder,
-									// 	file.path,
-									// 	file.file_type,
-									// ]);
-
-									// dbDispatch({ type: "TEST_DB_WORKER" });
-									// dbWorkerRef.current.postMessage({ files: folderFiles });
-
-									// await dbRef.current.execute(
-									// 	`INSERT OR IGNORE INTO media (name, size, folder, path, file_type) VALUES ${values}`,
-									// 	params,
-									// );
-								} catch (err) {
-									console.error("DB insert failed:", err);
-								} finally {
-									dfmvDispatch({
-										type: "SET_CONTEXT_MENU",
-										payload: { x: 0, y: 0, file: null },
-									});
-								}
-							}}
-							onRemove={() => {
-								try {
-									console.log("Remove", dfmvState.contextMenu.file);
-
-									startRemove(dfmvState.contextMenu.file.path, "folder");
-								} catch (err) {
-									console.error("DB remove failed:", err);
-								} finally {
-									dfmvDispatch({
-										type: "SET_CONTEXT_MENU",
-										payload: { x: 0, y: 0, file: null },
-									});
-								}
-							}}
-						/>
-					</div>
-				)}
+						}}
+						className="h-8 w-full min-w-0 appearance-none truncate rounded-md border border-line bg-surface-2 pr-7 pl-8 text-[13px] text-fg outline-none transition-colors hover:border-fg-subtle/60 focus:border-accent"
+					>
+						<option value="" disabled>
+							Select a drive
+						</option>
+						{dfmvState.allDrives.map((drive) => (
+							<option key={drive} value={drive}>
+								{drive}
+							</option>
+						))}
+					</select>
+					<ChevronDown
+						size={14}
+						className="pointer-events-none absolute right-2 text-fg-subtle"
+					/>
+				</div>
 			</div>
+
+			{dfmvState.currentDir && (
+				<div
+					className="border-y border-line px-3 py-2"
+					title={dfmvState.currentDir}
+				>
+					<div className="flex items-center gap-2 text-[13px] font-medium text-fg">
+						<FolderOpen size={14} className="shrink-0 text-accent" />
+						<span className="truncate">{baseName(dfmvState.currentDir)}</span>
+					</div>
+					{/* rtl + bdi truncates the start of long paths instead of the end */}
+					<div
+						className="mt-0.5 truncate text-left text-[11px] text-fg-subtle"
+						style={{ direction: "rtl" }}
+					>
+						<bdi>{dfmvState.currentDir}</bdi>
+					</div>
+				</div>
+			)}
+
+			<div className="min-h-0 flex-1 overflow-y-auto">{renderListing()}</div>
+
+			{menuFile && (
+				<ContextMenu
+					x={dfmvState.contextMenu.x}
+					y={dfmvState.contextMenu.y}
+					title={menuFile.name}
+					onClose={closeMenu}
+					onAdd={handleAddToLibrary}
+					onRemove={handleRemoveFromLibrary}
+				/>
+			)}
 		</section>
 	);
 }

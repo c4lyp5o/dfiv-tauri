@@ -1,11 +1,30 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Eye, EyeOff, Pause, Play, Volume2, VolumeX } from "lucide-react";
+
+const DEFAULT_UNMUTE_VOLUME = 50;
 
 const formatTime = (seconds) => {
-	if (!seconds || Number.isNaN(seconds)) return "00:00";
+	if (!seconds || Number.isNaN(seconds)) return "0:00";
 	const m = Math.floor(seconds / 60);
 	const s = Math.floor(seconds % 60);
 	return `${m}:${s < 10 ? "0" : ""}${s}`;
 };
+
+const percent = (value, max) => (max > 0 ? `${(value / max) * 100}%` : "0%");
+
+function ControlButton({ label, onClick, children }) {
+	return (
+		<button
+			type="button"
+			title={label}
+			aria-label={label}
+			onClick={onClick}
+			className="inline-flex h-8 w-8 items-center justify-center rounded-md text-white/80 transition-colors hover:bg-white/10 hover:text-white"
+		>
+			{children}
+		</button>
+	);
+}
 
 export default function VideoControls({
 	state,
@@ -16,17 +35,19 @@ export default function VideoControls({
 }) {
 	const [isDragging, setIsDragging] = useState(false);
 	const [localTime, setLocalTime] = useState(0);
-	const [lastVolume, setLastVolume] = useState(100); // To remember volume before mute
+	// Remembers the volume before muting
+	const [lastVolume, setLastVolume] = useState(100);
 
 	const { paused, timePos, duration, volume, visible } = state;
 
 	useEffect(() => {
-		if (!isDragging) setLocalTime(state.timePos);
-	}, [state.timePos, isDragging]);
+		if (!isDragging) setLocalTime(timePos);
+	}, [timePos, isDragging]);
 
 	const handleSliderChange = (e) => {
-		setLocalTime(parseFloat(e.target.value));
-		onSeek(parseFloat(e.target.value));
+		const value = Number.parseFloat(e.target.value);
+		setLocalTime(value);
+		onSeek(value);
 	};
 
 	const handleMuteToggle = () => {
@@ -34,21 +55,19 @@ export default function VideoControls({
 			setLastVolume(volume);
 			onVolumeChange(0);
 		} else {
-			// Restore previous volume, or default to 50 if it was 0
-			onVolumeChange(lastVolume || 50);
+			onVolumeChange(lastVolume || DEFAULT_UNMUTE_VOLUME);
 		}
 	};
 
 	return (
-		<div className="z-10 bg-gray-900/80 backdrop-blur-sm rounded-lg p-3 flex flex-col gap-2 text-white shadow-lg border border-white/10">
-			{/* PROGRESS BAR */}
+		<div className="flex flex-col gap-1.5 rounded-xl border border-white/10 bg-black/60 px-4 py-3 text-white shadow-2xl shadow-black/50 backdrop-blur-md">
 			<div className="flex items-center gap-3">
-				<span className="text-xs font-mono w-10 text-right">
-					{formatTime(timePos)}
+				<span className="w-12 text-right font-mono text-[11px] text-white/70 tabular-nums">
+					{formatTime(localTime)}
 				</span>
-
 				<input
 					type="range"
+					aria-label="Seek"
 					min={0}
 					max={duration || 100}
 					step={0.1}
@@ -56,169 +75,63 @@ export default function VideoControls({
 					onMouseDown={() => setIsDragging(true)}
 					onMouseUp={() => setIsDragging(false)}
 					onChange={handleSliderChange}
-					className="flex-1 h-1 bg-gray-600 rounded-lg appearance-none cursor-pointer accent-blue-500 hover:h-2 transition-all"
+					style={{ "--progress": percent(localTime, duration) }}
+					className="flex-1"
 				/>
-
-				<span className="text-xs font-mono w-10">{formatTime(duration)}</span>
+				<span className="w-12 font-mono text-[11px] text-white/70 tabular-nums">
+					{formatTime(duration)}
+				</span>
 			</div>
 
-			{/* BUTTON ROW */}
 			<div className="flex items-center justify-between">
-				<div className="flex items-center gap-4">
+				<div className="flex items-center gap-1">
 					<button
 						type="button"
+						aria-label={paused ? "Play" : "Pause"}
+						title={paused ? "Play (Space)" : "Pause (Space)"}
 						onClick={onTogglePause}
-						className="hover:text-blue-400 transition-colors"
+						className="mr-1 inline-flex h-9 w-9 items-center justify-center rounded-full bg-accent text-black transition-transform hover:scale-105"
 					>
 						{paused ? (
-							<PlayIcon className="w-6 h-6" />
+							<Play size={16} fill="currentColor" className="ml-0.5" />
 						) : (
-							<PauseIcon className="w-6 h-6" />
+							<Pause size={16} fill="currentColor" />
 						)}
 					</button>
 
-					<button
-						type="button"
+					<ControlButton
+						label={visible ? "Pixelate video" : "Show video"}
 						onClick={onToggleVideo}
-						className="hover:text-blue-400 transition-colors"
 					>
-						{visible ? (
-							<HideVideo className="w-6 h-6" />
-						) : (
-							<ShowVideo className="w-6 h-6" />
-						)}
-					</button>
+						{visible ? <EyeOff size={17} /> : <Eye size={17} />}
+					</ControlButton>
 
-					<div className="flex items-center gap-2 group/vol">
-						<button
-							type="button"
+					<div className="group/vol flex items-center">
+						<ControlButton
+							label={volume === 0 ? "Unmute" : "Mute"}
 							onClick={handleMuteToggle}
-							className="hover:text-blue-400 p-1"
 						>
-							{volume === 0 ? (
-								<MuteIcon className="w-6 h-6" />
-							) : (
-								<VolumeIcon className="w-6 h-6" />
-							)}
-						</button>
-
-						{/* Volume Slider - Expands on hover or always visible */}
-						<div className="w-0 overflow-hidden group-hover/vol:w-24 transition-all duration-300 ease-out flex items-center">
+							{volume === 0 ? <VolumeX size={17} /> : <Volume2 size={17} />}
+						</ControlButton>
+						<div className="flex w-0 items-center overflow-hidden transition-all duration-300 ease-out group-focus-within/vol:w-24 group-hover/vol:w-24">
 							<input
 								type="range"
+								aria-label="Volume"
 								min={0}
 								max={100}
 								value={volume}
-								onChange={(e) => onVolumeChange(parseFloat(e.target.value))}
-								className="w-20 h-1 ml-2 bg-gray-500 rounded-lg appearance-none cursor-pointer accent-white"
+								onChange={(e) => onVolumeChange(Number.parseFloat(e.target.value))}
+								style={{ "--progress": percent(volume, 100) }}
+								className="ml-1 w-20"
 							/>
 						</div>
 					</div>
 				</div>
 
-				<div className="text-xs text-gray-400">Standard / MPV</div>
+				<span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/50">
+					mpv
+				</span>
 			</div>
 		</div>
 	);
 }
-
-// Simple Icon Components (or use Lucide/Heroicons)
-const PlayIcon = ({ className }) => (
-	<svg className={className} fill="currentColor" viewBox="0 0 24 24">
-		<title>Play</title>
-		<path d="M8 5v14l11-7z" />
-	</svg>
-);
-
-const PauseIcon = ({ className }) => (
-	<svg className={className} fill="currentColor" viewBox="0 0 24 24">
-		<title>Pause</title>
-		<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-	</svg>
-);
-
-const ShowVideo = ({ className }) => (
-	<svg
-		xmlns="http://www.w3.org/2000/svg"
-		fill="none"
-		viewBox="0 0 24 24"
-		strokeWidth={1.5}
-		stroke="currentColor"
-		className={className}
-	>
-		<title>Hide Video</title>
-		<path
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"
-		/>
-		<path
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
-		/>
-	</svg>
-);
-
-const HideVideo = ({ className }) => (
-	<svg
-		xmlns="http://www.w3.org/2000/svg"
-		fill="none"
-		viewBox="0 0 24 24"
-		strokeWidth={1.5}
-		stroke="currentColor"
-		className={className}
-	>
-		<title>Show Video</title>
-		<path
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z"
-		/>
-		<path
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
-		/>
-		<path strokeLinecap="round" strokeLinejoin="round" d="M4.5 4.5l15 15" />
-	</svg>
-);
-
-const VolumeIcon = ({ className }) => (
-	<svg
-		className={className}
-		fill="none"
-		viewBox="0 0 24 24"
-		stroke="currentColor"
-		strokeWidth={2}
-	>
-		<title>Volume</title>
-		<path
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-		/>
-	</svg>
-);
-
-const MuteIcon = ({ className }) => (
-	<svg
-		className={className}
-		fill="none"
-		viewBox="0 0 24 24"
-		stroke="currentColor"
-		strokeWidth={2}
-	>
-		<title>Mute</title>
-		<path
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z"
-		/>
-		<path
-			strokeLinecap="round"
-			strokeLinejoin="round"
-			d="M17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2"
-		/>
-	</svg>
-);

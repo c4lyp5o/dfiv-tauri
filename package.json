@@ -7,24 +7,26 @@
 		"dev": "vite",
 		"build": "vite build",
 		"preview": "vite preview",
+		"lint": "biome lint --css-parse-tailwind-directives=true ./src",
+		"test": "vitest run",
 		"tauri": "tauri"
 	},
 	"dependencies": {
-		"@tailwindcss/vite": "^4.1.18",
-		"@tauri-apps/api": "^2.9.1",
-		"@tauri-apps/plugin-opener": "^2.5.2",
-		"@tauri-apps/plugin-sql": "~2.3.1",
-		"lucide-react": "^0.545.0",
-		"react": "^19.2.3",
-		"react-dom": "^19.2.3",
-		"react-window": "^2.2.3",
-		"swr": "^2.3.8",
-		"tailwindcss": "^4.1.18",
+		"@tailwindcss/vite": "^4.3.3",
+		"@tanstack/react-virtual": "^3.14.24",
+		"@tauri-apps/api": "^2.12.4",
+		"lucide-react": "^1.65.0",
+		"react": "^19.3.1",
+		"react-dom": "^19.3.1",
+		"swr": "^2.5.1",
+		"tailwindcss": "^4.3.3",
 		"tauri-plugin-libmpv-api": "^0.3.2"
 	},
 	"devDependencies": {
-		"@vitejs/plugin-react": "^4.7.0",
-		"vite": "^7.3.0",
-		"@tauri-apps/cli": "^2.9.6"
+		"@biomejs/biome": "2.6.4",
+		"@tauri-apps/cli": "^2.12.4",
+		"@vitejs/plugin-react": "^6.1.2",
+		"vite": "^8.3.5",
+		"vitest": "5.0.5"
 	}
 }

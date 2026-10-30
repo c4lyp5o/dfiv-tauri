@@ -1,32 +1,70 @@
-import { useDFMVContext } from "../context/DFMVContext";
+import { useEffect, useRef } from "react";
+import { FolderMinus, FolderPlus } from "lucide-react";
 
-export default function ContextMenu({ x, y, onClose, onAdd, onRemove }) {
-	const { dfmvState } = useDFMVContext();
+const MENU_WIDTH = 208;
+const MENU_HEIGHT = 110;
+const VIEWPORT_MARGIN = 8;
+
+function MenuItem({ icon: Icon, isDanger = false, onClick, children }) {
+	return (
+		<button
+			type="button"
+			role="menuitem"
+			onClick={onClick}
+			className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-[13px] transition-colors ${
+				isDanger
+					? "text-red-300 hover:bg-red-500/15"
+					: "text-fg hover:bg-surface-3"
+			}`}
+		>
+			<Icon size={14} className="shrink-0" />
+			{children}
+		</button>
+	);
+}
+
+export default function ContextMenu({ x, y, title, onClose, onAdd, onRemove }) {
+	const menuRef = useRef(null);
+
+	useEffect(() => {
+		const handlePointerDown = (e) => {
+			if (!menuRef.current?.contains(e.target)) onClose();
+		};
+		const handleKeyDown = (e) => {
+			if (e.key === "Escape") onClose();
+		};
+		document.addEventListener("mousedown", handlePointerDown);
+		document.addEventListener("keydown", handleKeyDown);
+		return () => {
+			document.removeEventListener("mousedown", handlePointerDown);
+			document.removeEventListener("keydown", handleKeyDown);
+		};
+	}, [onClose]);
+
+	// Keep the menu on screen near the window edges
+	const left = Math.min(x, window.innerWidth - MENU_WIDTH - VIEWPORT_MARGIN);
+	const top = Math.min(y, window.innerHeight - MENU_HEIGHT - VIEWPORT_MARGIN);
 
 	return (
-		// biome-ignore lint/a11y/noStaticElementInteractions: false
-		// biome-ignore lint/a11y/useKeyWithClickEvents: false
 		<div
-			className="absolute z-50 w-48 rounded-md border border-slate-300 bg-white shadow-lg"
-			style={{ top: y, left: x }}
-			onClick={onClose} // close when clicking inside
+			ref={menuRef}
+			role="menu"
+			className="fixed z-50 overflow-hidden rounded-lg border border-line bg-surface-2/95 p-1 shadow-2xl shadow-black/50 backdrop-blur"
+			style={{ left, top, width: MENU_WIDTH }}
 		>
-			{!dfmvState.appMode && (
-				<button
-					type="button"
-					className="block w-full px-4 py-2 text-left text-xs hover:bg-slate-100"
-					onClick={onAdd}
-				>
-					➕ Add to Media Collection
-				</button>
+			{title && (
+				<div className="truncate px-2.5 pt-1.5 pb-1 text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
+					{title}
+				</div>
 			)}
-			<button
-				type="button"
-				className="block w-full px-4 py-2 text-left text-xs hover:bg-slate-100"
-				onClick={onRemove}
-			>
-				❌ Remove from Media Collection
-			</button>
+			{onAdd && (
+				<MenuItem icon={FolderPlus} onClick={onAdd}>
+					Add to library
+				</MenuItem>
+			)}
+			<MenuItem icon={FolderMinus} isDanger onClick={onRemove}>
+				Remove from library
+			</MenuItem>
 		</div>
 	);
 }

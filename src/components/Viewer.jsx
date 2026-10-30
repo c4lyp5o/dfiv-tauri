@@ -1,16 +1,19 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { useDFMVContext } from "../context/DFMVContext";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Clapperboard, Music } from "lucide-react";
 import {
+	command,
 	init,
 	observeProperties,
-	command,
 	setProperty,
-	getProperty,
-	destroy,
 } from "tauri-plugin-libmpv-api";
+
+import { mediaKind, useDFMVContext } from "../context/DFMVContext";
 
 import VideoControls from "./VideoControls";
 import Options from "./FileExplorer/Options";
+import { Kbd } from "./ui";
+
+const ZOOM = { min: 0.1, max: 10, step: 1.1 };
 
 const OBSERVED_PROPERTIES = [
 	["pause", "flag"],
@@ -32,7 +35,7 @@ const mpvConfig = {
 };
 
 export default function Viewer() {
-	const { dfmvState, IMAGE_TYPES, AUDIO_TYPES, VIDEO_TYPES } = useDFMVContext();
+	const { dfmvState } = useDFMVContext();
 
 	const [zoom, setZoom] = useState(1);
 	const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -73,13 +76,26 @@ export default function Viewer() {
 		}
 	}, []);
 
-	const isVideo = VIDEO_TYPES.includes(dfmvState.selectedMediaFilename?.type);
+	const { name, type, path } = dfmvState.selectedMediaFilename;
+	const kind = mediaKind(type);
+	const isVideo = kind === "video";
+
+	const resetView = useCallback(() => {
+		setZoom(1);
+		setOffset({ x: 0, y: 0 });
+	}, []);
+
+	// Start each file fitted and centred
+	// biome-ignore lint/correctness/useExhaustiveDependencies: reset when the selected file changes
+	useEffect(() => {
+		resetView();
+	}, [path, resetView]);
 
 	const handleWheel = (e) => {
 		if (e.deltaY < 0) {
-			setZoom((z) => Math.min(z * 1.1, 10)); // max zoom 10x
+			setZoom((z) => Math.min(z * ZOOM.step, ZOOM.max));
 		} else {
-			setZoom((z) => Math.max(z / 1.1, 0.1)); // min zoom 0.1x
+			setZoom((z) => Math.max(z / ZOOM.step, ZOOM.min));
 		}
 	};
 
@@ -104,8 +120,21 @@ export default function Viewer() {
 		await setProperty("pause", !playbackState.paused);
 	};
 
+	const togglePrivacy = async (shouldShow) => {
+		try {
+			if (shouldShow) {
+				await setProperty("hwdec", "auto-safe");
+				await setProperty("vf", "");
+			} else {
+				await setProperty("hwdec", "no");
+				await setProperty("vf", "lavfi=[pixelize=w=48:h=48]");
+			}
+		} catch (e) {
+			console.error("Failed to toggle privacy mode", e);
+		}
+	};
+
 	const toggleVideo = () => {
-		console.log("toggle video", playbackState.visible);
 		togglePrivacy(!playbackState.visible);
 		setPlaybackState((prev) => ({
 			...prev,
@@ -113,28 +142,11 @@ export default function Viewer() {
 		}));
 	};
 
-	const togglePrivacy = async () => {
-		console.log("in privacy", playbackState.visible);
-		try {
-			if (!playbackState.visible) {
-				await setProperty("hwdec", "no");
-				await setProperty("vf", "lavfi=[pixelize=w=96:h=96]");
-			} else {
-				await setProperty("hwdec", "auto-safe");
-				await setProperty("vf", "");
-			}
-		} catch (e) {
-			console.error("Failed to toggle privacy mode", e);
-		}
-	};
-
 	const handleSeek = async (seconds) => {
 		await command("seek", [seconds, "absolute"]);
 	};
 
 	const handleKeyControls = async (e) => {
-		console.log(e.key);
-
 		if (!["ArrowRight", "ArrowLeft", "Enter", " "].includes(e.key)) return;
 
 		switch (e.key) {
@@ -152,11 +164,8 @@ export default function Viewer() {
 	};
 
 	const handleVolumeChange = async (newVolume) => {
-		console.log("new volume", newVolume);
 		const vol = Math.max(0, Math.min(100, newVolume));
 		await setProperty("volume", vol);
-
-		// Optimistically update state so UI feels snappy
 		setPlaybackState((prev) => ({ ...prev, volume: vol }));
 	};
 
@@ -166,16 +175,14 @@ export default function Viewer() {
 		const initMpv = async () => {
 			try {
 				await init(mpvConfig);
-				console.log("mpv initialization completed successfully!");
 
-				// Optional: Listen to MPV events (e.g., to update a custom seek bar)
 				unlisten = await observeProperties(
 					OBSERVED_PROPERTIES,
 					({ name, data }) => {
 						if (data === null) return;
 
 						setPlaybackState((prev) => {
-							// Optimization: Don't trigger re-render if value hasn't changed significantly
+							// Skip re-renders for sub-0.2s time-pos jitter
 							if (name === "time-pos" && Math.abs(prev.timePos - data) < 0.2)
 								return prev;
 
@@ -186,8 +193,6 @@ export default function Viewer() {
 								duration: name === "duration" ? data : prev.duration,
 							};
 						});
-						// You can update local state here if you want to build a custom UI
-						// console.log(name, data);
 					},
 				);
 			} catch (error) {
@@ -233,81 +238,95 @@ export default function Viewer() {
 	useEffect(() => {
 		if (!isVideo) return;
 
+		let timeoutId;
+
 		const resizeObserver = new ResizeObserver(() => {
-			updateMpvLayout();
+			if (timeoutId) clearTimeout(timeoutId);
+			timeoutId = setTimeout(() => {
+				updateMpvLayout();
+			}, 16);
 		});
 
 		if (containerRef.current) {
 			resizeObserver.observe(containerRef.current);
 		}
 
-		updateMpvLayout();
-
-		return () => resizeObserver.disconnect();
+		return () => {
+			if (timeoutId) clearTimeout(timeoutId);
+			resizeObserver.disconnect();
+		};
 	}, [isVideo, updateMpvLayout]);
 
 	return (
 		<section
 			ref={containerRef}
-			className={`flex-1 flex justify-center items-center overflow-hidden relative ${
-				isVideo ? "bg-transparent" : "bg-gray-900"
+			className={`relative flex flex-1 items-center justify-center overflow-hidden ${
+				isVideo ? "bg-transparent" : "bg-surface-0"
 			}`}
 			onWheel={handleWheel}
 			onMouseDown={handleMouseDown}
 			onMouseMove={handleMouseMove}
 			onMouseUp={handleMouseUp}
 			onMouseLeave={handleMouseLeave}
+			onDoubleClick={resetView}
 			aria-label="Media viewer"
 		>
-			{dfmvState.selectedMedia && <Options />}
+			{dfmvState.selectedMedia && (
+				<Options
+					key={path}
+					zoom={kind === "image" ? zoom : null}
+					onResetZoom={resetView}
+				/>
+			)}
 
-			{IMAGE_TYPES.includes(dfmvState.selectedMediaFilename?.type) && (
+			{kind === "image" && (
 				<img
 					src={dfmvState.selectedMedia}
-					alt={dfmvState.selectedMediaFilename.name}
+					alt={name}
 					draggable={false}
-					className="transition-transform duration-75"
+					className="max-h-full max-w-full object-contain transition-transform duration-75"
 					style={{
 						transform: `translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,
 						cursor: dragging ? "grabbing" : "grab",
-						userSelect: "none",
 					}}
 				/>
 			)}
 
-			{AUDIO_TYPES.includes(dfmvState.selectedMediaFilename?.type) && (
-				// biome-ignore lint/a11y/useMediaCaption: captions otw
-				<audio
-					src={dfmvState.selectedMedia}
-					controls
-					autoPlay
-					className="z-50"
-				/>
+			{kind === "audio" && (
+				<div className="flex w-full max-w-md flex-col items-center gap-5 rounded-2xl border border-line bg-surface-1 p-8 shadow-2xl shadow-black/40">
+					<div className="flex h-28 w-28 items-center justify-center rounded-2xl bg-linear-to-br from-violet-500/35 to-accent/25 text-violet-200">
+						<Music size={44} />
+					</div>
+					<div className="w-full min-w-0 text-center">
+						<p className="truncate text-sm font-medium text-fg" title={name}>
+							{name}
+						</p>
+						<p className="mt-0.5 text-[11px] uppercase tracking-wide text-fg-subtle">
+							{type} audio
+						</p>
+					</div>
+					{/* biome-ignore lint/a11y/useMediaCaption: local audio files have no captions */}
+					<audio
+						src={dfmvState.selectedMedia}
+						controls
+						autoPlay
+						className="w-full"
+					/>
+				</div>
 			)}
 
-			{VIDEO_TYPES.includes(dfmvState.selectedMediaFilename?.type) && (
+			{isVideo && (
 				<>
-					<div className="w-full h-full flex justify-center items-center">
-						{/* We render NOTHING here (or a transparent div). 
-               MPV renders directly to the window surface.
-               
-               If MPV is rendering *behind* the webview, ensure this div 
-               and the section container are transparent in the center.
-            */}
-					</div>
-					{/* 1. Click on video to toggle play/pause */}
-					{/** biome-ignore lint/a11y/noStaticElementInteractions: false*/}
+					{/* mpv renders behind the transparent webview; this area stays empty */}
+					{/* biome-ignore lint/a11y/noStaticElementInteractions: click/keys control playback */}
 					<div
 						className="absolute inset-0 z-0"
 						onClick={togglePause}
 						onKeyDown={handleKeyControls}
-						// biome-ignore lint/a11y/noNoninteractiveTabindex: false
+						// biome-ignore lint/a11y/noNoninteractiveTabindex: focus target for playback keys
 						tabIndex={0}
 					/>
-					{/* 2. The Controls Component */}
-					{/* 'group-hover' allows controls to appear only when mouse is over the section */}
-					{/* opacity-100 ensures it is always visible for debugging */}
-					<div className="absolute bottom-0 left-0 right-0 p-4 z-10 opacity-0 hover:opacity-100">
+					<div className="absolute inset-x-0 bottom-0 z-10 p-4 opacity-0 transition-opacity duration-200 focus-within:opacity-100 hover:opacity-100">
 						<VideoControls
 							state={playbackState}
 							onSeek={handleSeek}
@@ -320,7 +339,16 @@ export default function Viewer() {
 			)}
 
 			{!dfmvState.selectedMedia && (
-				<span className="text-white">Select media...</span>
+				<div className="flex flex-col items-center gap-3 text-center">
+					<div className="rounded-2xl border border-line bg-surface-1 p-4 text-fg-subtle">
+						<Clapperboard size={28} />
+					</div>
+					<p className="text-sm font-medium text-fg-muted">Nothing selected</p>
+					<p className="flex items-center gap-1.5 text-xs text-fg-subtle">
+						Choose a file in the sidebar, or browse with <Kbd>↑</Kbd>
+						<Kbd>↓</Kbd>
+					</p>
+				</div>
 			)}
 		</section>
 	);

@@ -1,14 +1,16 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
-import { CheckCircle, XCircle, Info, AlertTriangle, X } from "lucide-react";
+import { createContext, useCallback, useContext, useRef, useState } from "react";
+import { CircleCheck, CircleX, Info, TriangleAlert, X } from "lucide-react";
 
-const ToastContext = createContext();
+const ToastContext = createContext(null);
 export const useToast = () => useContext(ToastContext);
 
+const EXIT_ANIMATION_MS = 300;
+
 const icons = {
-	success: <CheckCircle size={14} className="text-green-500 shrink-0" />,
-	error: <XCircle size={14} className="text-red-500 shrink-0" />,
-	warning: <AlertTriangle size={14} className="text-yellow-500 shrink-0" />,
-	info: <Info size={14} className="text-slate-500 shrink-0" />,
+	success: <CircleCheck size={15} className="shrink-0 text-emerald-400" />,
+	error: <CircleX size={15} className="shrink-0 text-red-400" />,
+	warning: <TriangleAlert size={15} className="shrink-0 text-amber-400" />,
+	info: <Info size={15} className="shrink-0 text-sky-400" />,
 };
 
 // Map placement prop -> Tailwind positioning classes
@@ -25,22 +27,26 @@ const placementClasses = {
 
 export const ToastProvider = ({ children, placement = "top-right" }) => {
 	const [toasts, setToasts] = useState([]);
+	const nextId = useRef(0);
 
-	const removeToast = (id) => {
+	const removeToast = useCallback((id) => {
 		setToasts((prev) =>
 			prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)),
 		);
 		setTimeout(() => {
 			setToasts((prev) => prev.filter((t) => t.id !== id));
-		}, 300);
-	};
-
-	// biome-ignore lint/correctness/useExhaustiveDependencies: false
-	const showToast = useCallback((message, type = "info", duration = 2500) => {
-		const id = Date.now();
-		setToasts((prev) => [...prev, { id, message, type, exiting: false }]);
-		setTimeout(() => removeToast(id), duration);
+		}, EXIT_ANIMATION_MS);
 	}, []);
+
+	const showToast = useCallback(
+		(message, type = "info", duration = 2500) => {
+			nextId.current += 1;
+			const id = nextId.current;
+			setToasts((prev) => [...prev, { id, message, type, exiting: false }]);
+			setTimeout(() => removeToast(id), duration);
+		},
+		[removeToast],
+	);
 
 	const placementClass =
 		placementClasses[placement] || placementClasses["top-right"];
@@ -49,31 +55,25 @@ export const ToastProvider = ({ children, placement = "top-right" }) => {
 		<ToastContext.Provider value={{ showToast }}>
 			{children}
 			<div
-				className={`fixed z-50 flex flex-col gap-2 ${placementClass} transition-transform`}
+				className={`pointer-events-none fixed z-50 flex flex-col gap-2 ${placementClass}`}
 			>
 				{toasts.map((toast) => (
 					<div
 						key={toast.id}
-						className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm shadow-md border transition-all duration-300 ${
+						role="status"
+						className={`pointer-events-auto flex max-w-sm items-center gap-2.5 rounded-lg border border-line bg-surface-2/95 px-3 py-2 text-[13px] text-fg shadow-xl shadow-black/40 backdrop-blur transition-all duration-300 ${
 							toast.exiting
-								? "opacity-0 translate-x-5"
-								: "opacity-100 translate-x-0"
-						} ${
-							toast.type === "success"
-								? "border-green-200 bg-green-50 text-green-700"
-								: toast.type === "error"
-									? "border-red-200 bg-red-50 text-red-700"
-									: toast.type === "warning"
-										? "border-yellow-200 bg-yellow-50 text-yellow-700"
-										: "border-slate-200 bg-white text-slate-700"
+								? "translate-x-5 opacity-0"
+								: "translate-x-0 opacity-100"
 						}`}
 					>
 						{icons[toast.type] ?? icons.info}
-						<span className="flex-1 leading-tight">{toast.message}</span>
+						<span className="flex-1 leading-snug">{toast.message}</span>
 						<button
 							type="button"
+							aria-label="Dismiss"
 							onClick={() => removeToast(toast.id)}
-							className="text-slate-400 hover:text-slate-600 transition-colors"
+							className="rounded p-0.5 text-fg-subtle transition-colors hover:text-fg"
 						>
 							<X size={12} />
 						</button>
