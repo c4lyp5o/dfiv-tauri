@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
+
 import { useDBContext, useDFMVContext } from "../../context/DFMVContext";
 import { useToast } from "../../context/ToastContext";
+
 import useFolder from "../../hooks/useFolder";
 
 import ContextMenu from "../ContextMenu";
@@ -122,7 +124,7 @@ export default function Sidebar() {
 			e.preventDefault();
 			const prevIdx = Math.max(idx - 1, 0);
 			const file = currentFiles[prevIdx];
-			fmvDispatch({
+			dfmvDispatch({
 				type: "SET_SELECTED_MEDIA_FILENAME",
 				payload: {
 					name: file.name,
@@ -277,7 +279,7 @@ export default function Sidebar() {
 				)}
 				<ul className="p-1">
 					{currentFiles
-						.sort((a, b) => {
+						?.sort((a, b) => {
 							if (a.is_directory && !b.is_directory) return -1;
 							if (!a.is_directory && b.is_directory) return 1;
 							return a.name.localeCompare(b.name);

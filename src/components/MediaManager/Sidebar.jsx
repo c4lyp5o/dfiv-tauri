@@ -1,64 +1,47 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-import { List } from "react-window";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { convertFileSrc } from "@tauri-apps/api/core";
+
 import { useDBContext, useDFMVContext } from "../../context/DFMVContext";
-import useDb from "../../hooks/useDb";
+
+import { useMediaByType, useMediaSearch } from "../../hooks/useMediaQuery";
 import useDebounce from "../../hooks/useDebounce";
-import SearchWorker from "../../utils/searchWorker?worker";
 
 import ContextMenu from "../ContextMenu";
 
-const VirtListRowComponent = ({ index, sorted, icon, style }) => {
+const VirtListRowComponent = memo(
+	({ index, sorted, icon, style, selectedPath, onSelect, onContextMenu }) => {
+		return (
+			<li
+				style={style}
+				onContextMenu={(e) => {
+					e.preventDefault();
+					onContextMenu(e, sorted[index]);
+				}}
+				title={sorted[index].path}
+			>
+				<button
+					type="button"
+					className={`flex w-full items-center rounded-md text-left text-sm transition-colors duration-150
+          ${
+						selectedPath === sorted[index].path
+							? "bg-blue-100 font-medium text-blue-800"
+							: "text-slate-700 hover:bg-slate-200"
+					}`}
+					onClick={() => onSelect(sorted[index], index)}
+				>
+					<span className="w-5 text-center">{icon}</span>
+					<span className="text-sm truncate">{sorted[index].name}</span>
+				</button>
+			</li>
+		);
+	},
+);
+
+const VirtList = ({ mediaFiles, types, icon, isLoading }) => {
+	const parentRef = useRef(null);
 	const { dfmvDispatch, dfmvState } = useDFMVContext();
 
-	return (
-		<li
-			style={style}
-			onContextMenu={(e) => {
-				e.preventDefault();
-				dfmvDispatch({
-					type: "SET_CONTEXT_MENU",
-					payload: { x: e.clientX, y: e.clientY, file: sorted[index] },
-				});
-			}}
-			title={sorted[index].path}
-		>
-			<button
-				type="button"
-				className={`flex w-full items-center rounded-md text-left text-sm transition-colors duration-150
-            ${
-							dfmvState.selectedMediaFilename?.path === sorted[index].path
-								? "bg-blue-100 font-medium text-blue-800"
-								: "text-slate-700 hover:bg-slate-200"
-						}`}
-				onClick={() => {
-					dfmvDispatch({
-						type: "SET_INFO_BOX",
-						payload: { visible: false, content: "" },
-					});
-					dfmvDispatch({
-						type: "SET_SELECTED_MEDIA",
-						payload: convertFileSrc(sorted[index].path),
-					});
-					dfmvDispatch({
-						type: "SET_SELECTED_MEDIA_FILENAME",
-						payload: {
-							name: sorted[index].name,
-							path: sorted[index].path,
-							type: sorted[index].file_type,
-							index,
-						},
-					});
-				}}
-			>
-				<span className="w-5 text-center">{icon}</span>
-				<span className="text-sm truncate">{sorted[index].name}</span>
-			</button>
-		</li>
-	);
-};
-
-const VirtList = ({ mediaFiles, types, icon }) => {
 	const sorted = useMemo(() => {
 		return mediaFiles
 			.filter((f) => Array.isArray(types) && types.includes(f.file_type))
@@ -69,16 +52,112 @@ const VirtList = ({ mediaFiles, types, icon }) => {
 			});
 	}, [mediaFiles, types]);
 
+	const virtualizer = useVirtualizer({
+		count: sorted.length,
+		getScrollElement: () => parentRef.current,
+		estimateSize: () => 25,
+	});
+
+	const selectedPath = dfmvState.selectedMediaFilename?.path;
+
+	const onSelect = useCallback(
+		(file, index) => {
+			dfmvDispatch({
+				type: "SET_INFO_BOX",
+				payload: { visible: false, content: "" },
+			});
+			dfmvDispatch({
+				type: "SET_SELECTED_MEDIA",
+				payload: convertFileSrc(file.path),
+			});
+			dfmvDispatch({
+				type: "SET_SELECTED_MEDIA_FILENAME",
+				payload: {
+					name: file.name,
+					path: file.path,
+					type: file.file_type,
+					index,
+				},
+			});
+		},
+		[dfmvDispatch],
+	);
+
+	const onContextMenu = useCallback(
+		(e, file) => {
+			dfmvDispatch({
+				type: "SET_CONTEXT_MENU",
+				payload: { x: e.clientX, y: e.clientY, file },
+			});
+		},
+		[dfmvDispatch],
+	);
+
+	if (isLoading) {
+		return (
+			<div className="flex flex-1 items-center justify-center py-8">
+				<svg
+					className="h-6 w-6 animate-spin text-blue-500"
+					xmlns="http://www.w3.org/2000/svg"
+					fill="none"
+					viewBox="0 0 24 24"
+				>
+					<title>Loading...</title>
+					<circle
+						className="opacity-25"
+						cx="12"
+						cy="12"
+						r="10"
+						stroke="currentColor"
+						strokeWidth="4"
+					/>
+					<path
+						className="opacity-75"
+						fill="currentColor"
+						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+					/>
+				</svg>
+				<span className="ml-2 text-sm text-slate-500">Loading...</span>
+			</div>
+		);
+	}
+
+	if (sorted.length === 0) {
+		return (
+			<div className="flex flex-1 items-center justify-center py-8">
+				<span className="text-sm text-slate-400">No files found</span>
+			</div>
+		);
+	}
+
 	return (
-		<List
-			rowComponent={VirtListRowComponent}
-			rowCount={sorted.length}
-			rowHeight={25}
-			rowProps={{
-				sorted,
-				icon,
-			}}
-		/>
+		<div ref={parentRef} className="flex-1 overflow-auto">
+			<ul
+				style={{
+					height: virtualizer.getTotalSize(),
+					position: "relative",
+					width: "100%",
+				}}
+			>
+				{virtualizer.getVirtualItems().map((vRow) => (
+					<VirtListRowComponent
+						key={vRow.key}
+						index={vRow.index}
+						sorted={sorted}
+						icon={icon}
+						selectedPath={selectedPath}
+						onSelect={onSelect}
+						onContextMenu={onContextMenu}
+						style={{
+							position: "absolute",
+							top: vRow.start,
+							height: vRow.size,
+							width: "100%",
+						}}
+					/>
+				))}
+			</ul>
+		</div>
 	);
 };
 
@@ -88,16 +167,36 @@ export default function Sidebar() {
 		useDFMVContext();
 
 	const [searchQuery, setSearchQuery] = useState("");
-	const [filtered, setFiltered] = useState([]);
 	const [openAccordion, setOpenAccordion] = useState(null);
 
-	const { data: currentFiles = [], mutate } = useDb(5000);
-	const debouncedSearchQuery = useDebounce(searchQuery, 500);
-	const mediaFiles = searchQuery ? filtered : currentFiles;
+	const debouncedSearchQuery = useDebounce(searchQuery, 200);
+	const isSearching = !!debouncedSearchQuery;
+
+	const types =
+		openAccordion === "images"
+			? IMAGE_TYPES
+			: openAccordion === "audios"
+				? AUDIO_TYPES
+				: openAccordion === "videos"
+					? VIDEO_TYPES
+					: [];
+
+	const { data: browseFiles = [], isLoading: isBrowseLoading } = useMediaByType(
+		types,
+		!!openAccordion && !isSearching,
+	);
+
+	const { data: searchFiles = [], isLoading: isSearchLoading } = useMediaSearch(
+		types,
+		debouncedSearchQuery,
+		!!openAccordion && isSearching,
+	);
+
+	const mediaFiles = isSearching ? searchFiles : browseFiles;
+	const isLoading = isSearching ? isSearchLoading : isBrowseLoading;
 
 	const menuRef = useRef();
 	const scrollableContainerRef = useRef();
-	const searchWorkerRef = useRef(null);
 
 	useEffect(() => {
 		const handleClick = (e) => {
@@ -124,34 +223,8 @@ export default function Sidebar() {
 		};
 	}, [dfmvDispatch]);
 
-	// biome-ignore lint/correctness/useExhaustiveDependencies: false
-	useEffect(() => {
-		if (searchWorkerRef.current) {
-			if (debouncedSearchQuery) {
-				searchWorkerRef.current.postMessage({
-					query: debouncedSearchQuery,
-					files: currentFiles,
-				});
-			} else {
-				setFiltered(currentFiles);
-			}
-		}
-	}, [debouncedSearchQuery]);
-
-	useEffect(() => {
-		searchWorkerRef.current = new SearchWorker();
-		searchWorkerRef.current.onmessage = (e) => {
-			setFiltered(e.data);
-		};
-
-		return () => {
-			searchWorkerRef.current?.terminate();
-		};
-	}, []);
-
 	const toggleAccordion = (type) => {
 		setSearchQuery("");
-		setFiltered([]);
 		setOpenAccordion((prev) => (prev === type ? null : type));
 		scrollToTop();
 	};
@@ -244,8 +317,12 @@ export default function Sidebar() {
 
 	return (
 		// biome-ignore lint/a11y/noStaticElementInteractions: false
-		// biome-ignore lint/a11y/noNoninteractiveTabindex: false
-		<section onKeyDown={handleKeyDown} tabIndex={0}>
+		<section
+			onKeyDown={handleKeyDown}
+			// biome-ignore lint/a11y/noNoninteractiveTabindex: false
+			tabIndex={0}
+			className="flex flex-col h-full"
+		>
 			{/* Header */}
 			<div className="flex items-center justify-between border-b border-slate-200 p-2">
 				{/* Search Input */}
@@ -290,7 +367,10 @@ export default function Sidebar() {
 			</div>
 
 			{/* Accordions */}
-			<div ref={scrollableContainerRef} className="flex-1 overflow-y-auto">
+			<div
+				ref={scrollableContainerRef}
+				className="flex-1 flex flex-col min-h-0 overflow-y-auto"
+			>
 				{/* Images */}
 				<div>
 					<button
@@ -302,7 +382,12 @@ export default function Sidebar() {
 						<span>{openAccordion === "images" ? "−" : "+"}</span>
 					</button>
 					{openAccordion === "images" && (
-						<VirtList mediaFiles={mediaFiles} types={IMAGE_TYPES} icon="🖼️" />
+						<VirtList
+							mediaFiles={mediaFiles}
+							types={IMAGE_TYPES}
+							icon="🖼️"
+							isLoading={isLoading}
+						/>
 					)}
 				</div>
 
@@ -317,7 +402,12 @@ export default function Sidebar() {
 						<span>{openAccordion === "audios" ? "−" : "+"}</span>
 					</button>
 					{openAccordion === "audios" && (
-						<VirtList mediaFiles={mediaFiles} types={AUDIO_TYPES} icon="🎵" />
+						<VirtList
+							mediaFiles={mediaFiles}
+							types={AUDIO_TYPES}
+							icon="🎵"
+							isLoading={isLoading}
+						/>
 					)}
 				</div>
 
@@ -332,7 +422,12 @@ export default function Sidebar() {
 						<span>{openAccordion === "videos" ? "−" : "+"}</span>
 					</button>
 					{openAccordion === "videos" && (
-						<VirtList mediaFiles={mediaFiles} types={VIDEO_TYPES} icon="🎞️" />
+						<VirtList
+							mediaFiles={mediaFiles}
+							types={VIDEO_TYPES}
+							icon="🎞️"
+							isLoading={isLoading}
+						/>
 					)}
 				</div>
 

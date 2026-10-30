@@ -1,22 +1,23 @@
 import {
 	createContext,
+	useCallback,
 	useContext,
 	useEffect,
+	useMemo,
 	useReducer,
 	useRef,
 } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import Database from "@tauri-apps/plugin-sql";
 
-const dbReducerInitialState = {
+export const dbReducerInitialState = {
 	status: "Idle",
 	message: "",
 	progress: 0,
 	isNuking: false,
 };
 
-const dbReducer = (state, action) => {
+export const dbReducer = (state, action) => {
 	switch (action.type) {
 		case "START_IMPORT":
 			return {
@@ -36,7 +37,7 @@ const dbReducer = (state, action) => {
 			return {
 				...state,
 				status: "Imported",
-				message: `Import complete (${action.payload.inserted}/${action.payload.total})`,
+				message: `Import complete: added ${action.payload.inserted} of ${action.payload.total} files`,
 				progress: 100,
 			};
 		case "IMPORT_FAILURE":
@@ -57,19 +58,33 @@ const dbReducer = (state, action) => {
 				status: "Error",
 				message: `Removed failed: ${action.payload}`,
 			};
-		case "NUKE_DB":
+		case "NUKE_START":
 			return {
 				...state,
-				status: !state.isNuking ? "Nuking" : "Nuked",
-				message: !state.isNuking ? "Nuking the database..." : "Database nuked",
-				isNuking: !state.isNuking,
+				status: "Nuking",
+				message: "Nuking the database...",
+				isNuking: true,
+			};
+		case "NUKE_SUCCESS":
+			return {
+				...state,
+				status: "Nuked",
+				message: "Database nuked",
+				isNuking: false,
+			};
+		case "NUKE_FAILURE":
+			return {
+				...state,
+				status: "Error",
+				message: `Nuke failed: ${action.payload}`,
+				isNuking: false,
 			};
 		default:
 			return state;
 	}
 };
 
-const dfmvReducerInitialState = {
+export const dfmvReducerInitialState = {
 	appMode: false,
 	allDrives: [],
 	currentDrive: "",
@@ -83,8 +98,7 @@ const dfmvReducerInitialState = {
 	showSettings: false,
 };
 
-const dfmvReducer = (state, action) => {
-	console.log(action);
+export const dfmvReducer = (state, action) => {
 	switch (action.type) {
 		case "TOGGLE_APP_MODE":
 			return {
@@ -169,33 +183,30 @@ const dfmvReducer = (state, action) => {
 	}
 };
 
+const IMAGE_TYPES = [
+	"jpg",
+	"jpeg",
+	"png",
+	"gif",
+	"bmp",
+	"webp",
+	"tiff",
+	"svg",
+	"avif",
+	"heic",
+];
+const AUDIO_TYPES = ["mp3", "wav", "ogg", "flac", "aac"];
+const VIDEO_TYPES = ["mp4", "webm", "mov", "avi", "mkv"];
+
 const DBContext = createContext();
-const DFMVContext = createContext();
+const DFMVStateContext = createContext();
+const DFMVDispatchContext = createContext();
 
 export function DBProvider({ children }) {
 	const [dbState, dbDispatch] = useReducer(dbReducer, dbReducerInitialState);
 	const dbRef = useRef(null);
 
-	useEffect(() => {
-		const initDb = async () => {
-			try {
-				const db = await Database.load("sqlite:dfiv.db");
-				await db.execute("PRAGMA journal_mode = WAL");
-				dbRef.current = db;
-			} catch (err) {
-				console.error("DB init failed ❌:", err);
-			}
-		};
-		initDb();
-
-		return () => {
-			if (dbRef.current) {
-				dbRef.current.close().catch(console.error);
-			}
-		};
-	}, []);
-
-	const startImport = async (folderPath) => {
+	const startImport = useCallback(async (folderPath) => {
 		dbDispatch({ type: "START_IMPORT" });
 
 		const unlisten = await listen("import-progress", (event) => {
@@ -212,13 +223,13 @@ export function DBProvider({ children }) {
 		});
 
 		try {
-			const totalImported = await invoke("import_directory", {
+			const { inserted, total } = await invoke("import_directory", {
 				path: folderPath,
 			});
 
 			dbDispatch({
 				type: "IMPORT_SUCCESS",
-				payload: { inserted: totalImported, total: totalImported },
+				payload: { inserted, total },
 			});
 		} catch (error) {
 			console.error("Import failed:", error);
@@ -229,47 +240,42 @@ export function DBProvider({ children }) {
 		} finally {
 			unlisten();
 		}
-	};
+	}, []);
 
-	const startRemove = async (item, itemType) => {
+	const startRemove = useCallback(async (item, itemType) => {
 		try {
 			await invoke("remove", { item, itemType });
 			dbDispatch({ type: "REMOVE_SUCCESS", payload: { item, itemType } });
 		} catch (error) {
-			console.error("DB remove failed:", err);
+			console.error("DB remove failed:", error);
 			dbDispatch({ type: "REMOVE_FAILURE", payload: error });
 		}
-	};
+	}, []);
 
-	const startNukeDb = async () => {
+	const startNukeDb = useCallback(async () => {
+		dbDispatch({ type: "NUKE_START" });
 		try {
-			dbDispatch({ type: "NUKE_DB" });
 			await invoke("nuke_db");
-			await new Promise((resolve) => setTimeout(resolve, 5000));
+			dbDispatch({ type: "NUKE_SUCCESS" });
 		} catch (error) {
 			console.error("DB nuke failed:", error);
-		} finally {
-			dbDispatch({ type: "NUKE_DB" });
+			dbDispatch({ type: "NUKE_FAILURE", payload: error });
 		}
-	};
+	}, []);
 
-	return (
-		<DBContext.Provider
-			value={{
-				// reducers
-				dbState,
-				dbDispatch,
-				// refs
-				dbRef,
-				// commands
-				startImport,
-				startRemove,
-				startNukeDb,
-			}}
-		>
-			{children}
-		</DBContext.Provider>
+	const value = useMemo(
+		() => ({
+			dbState,
+			dbDispatch,
+			dbRef,
+			startImport,
+			startRemove,
+			startNukeDb,
+		}),
+		[dbState, startImport, startRemove, startNukeDb],
 	);
+
+	return <DBContext.Provider value={value}>{children}</DBContext.Provider>;
 }
 
 export function DFMVProvider({ children }) {
@@ -277,21 +283,6 @@ export function DFMVProvider({ children }) {
 		dfmvReducer,
 		dfmvReducerInitialState,
 	);
-
-	const IMAGE_TYPES = [
-		"jpg",
-		"jpeg",
-		"png",
-		"gif",
-		"bmp",
-		"webp",
-		"tiff",
-		"svg",
-		"avif",
-		"heic",
-	];
-	const AUDIO_TYPES = ["mp3", "wav", "ogg", "flac", "aac"];
-	const VIDEO_TYPES = ["mp4", "webm", "mov", "avi", "mkv"];
 
 	useEffect(() => {
 		const initDrives = async () => {
@@ -305,19 +296,11 @@ export function DFMVProvider({ children }) {
 	}, []);
 
 	return (
-		<DFMVContext.Provider
-			value={{
-				// reducers
-				dfmvState,
-				dfmvDispatch,
-				// constants
-				IMAGE_TYPES,
-				AUDIO_TYPES,
-				VIDEO_TYPES,
-			}}
-		>
-			{children}
-		</DFMVContext.Provider>
+		<DFMVDispatchContext.Provider value={dfmvDispatch}>
+			<DFMVStateContext.Provider value={dfmvState}>
+				{children}
+			</DFMVStateContext.Provider>
+		</DFMVDispatchContext.Provider>
 	);
 }
 
@@ -326,5 +309,11 @@ export function useDBContext() {
 }
 
 export function useDFMVContext() {
-	return useContext(DFMVContext);
+	return {
+		dfmvState: useContext(DFMVStateContext),
+		dfmvDispatch: useContext(DFMVDispatchContext),
+		IMAGE_TYPES,
+		AUDIO_TYPES,
+		VIDEO_TYPES,
+	};
 }

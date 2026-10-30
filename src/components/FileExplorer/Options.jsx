@@ -1,40 +1,49 @@
 import { useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { useSWRConfig } from "swr";
+
 import { useDBContext, useDFMVContext } from "../../context/DFMVContext";
+
 import useFolder from "../../hooks/useFolder";
-import useDb from "../../hooks/useDb";
 
 export default function Options() {
 	const { startRemove } = useDBContext();
 	const { dfmvState, dfmvDispatch, IMAGE_TYPES } = useDFMVContext();
+	const { mutate } = useSWRConfig();
 
 	const { mutate: mutateFolder } = useFolder(dfmvState.currentDir, 5000);
-	const { mutate: mutateDb } = useDb(5000);
 
 	const infoBtnRef = useRef(null);
 
+	const revalidateMedia = () => {
+		mutate(
+			(key) => Array.isArray(key) && key[0]?.startsWith?.("media-"),
+			undefined,
+			{ revalidate: true },
+		);
+		mutate("media-stats");
+	};
+
 	const handleDelete = async () => {
 		if (!dfmvState.selectedMedia) return;
-		if (dfmvState.selectedMedia) {
-			dfmvDispatch({
-				type: "SET_SELECTED_MEDIA",
-				payload: null,
+
+		dfmvDispatch({ type: "SET_SELECTED_MEDIA", payload: null });
+
+		if (!dfmvState.appMode) {
+			await invoke("delete_file", {
+				path: dfmvState.selectedMediaFilename.path,
 			});
-			if (!dfmvState.appMode) {
-				await invoke("delete_file", {
-					path: dfmvState.selectedMediaFilename.path,
-				});
-				mutateFolder();
-			} else {
-				await startRemove(dfmvState.selectedMediaFilename.path, "file");
-				mutateDb();
-			}
-			dfmvDispatch({
-				type: "SET_SELECTED_MEDIA_FILENAME",
-				payload: { name: "", path: "", type: "", index: 0 },
-			});
-			handleCloseInfo();
+			mutateFolder();
+		} else {
+			await startRemove(dfmvState.selectedMediaFilename.path, "file");
+			revalidateMedia();
 		}
+
+		dfmvDispatch({
+			type: "SET_SELECTED_MEDIA_FILENAME",
+			payload: { name: "", path: "", type: "", index: 0 },
+		});
+		handleCloseInfo();
 	};
 
 	const handleInfo = () => {
@@ -54,10 +63,7 @@ export default function Options() {
 				type: "SET_INFO_BOX",
 				payload: {
 					visible: true,
-					content: `File: ${dfmvState.selectedMediaFilename.name}\nDimensions: ${img.width} x ${img.height}\nType: ${img.src
-						.split(".")
-						.pop()
-						.toUpperCase()}`,
+					content: `File: ${dfmvState.selectedMediaFilename.name}\nDimensions: ${img.width} x ${img.height}\nType: ${img.src.split(".").pop().toUpperCase()}`,
 				},
 			});
 		};

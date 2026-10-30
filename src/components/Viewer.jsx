@@ -5,8 +5,6 @@ import {
 	observeProperties,
 	command,
 	setProperty,
-	getProperty,
-	destroy,
 } from "tauri-plugin-libmpv-api";
 
 import VideoControls from "./VideoControls";
@@ -105,7 +103,6 @@ export default function Viewer() {
 	};
 
 	const toggleVideo = () => {
-		console.log("toggle video", playbackState.visible);
 		togglePrivacy(!playbackState.visible);
 		setPlaybackState((prev) => ({
 			...prev,
@@ -113,15 +110,14 @@ export default function Viewer() {
 		}));
 	};
 
-	const togglePrivacy = async () => {
-		console.log("in privacy", playbackState.visible);
+	const togglePrivacy = async (shouldShow) => {
 		try {
-			if (!playbackState.visible) {
-				await setProperty("hwdec", "no");
-				await setProperty("vf", "lavfi=[pixelize=w=48:h=48]");
-			} else {
+			if (shouldShow) {
 				await setProperty("hwdec", "auto-safe");
 				await setProperty("vf", "");
+			} else {
+				await setProperty("hwdec", "no");
+				await setProperty("vf", "lavfi=[pixelize=w=48:h=48]");
 			}
 		} catch (e) {
 			console.error("Failed to toggle privacy mode", e);
@@ -133,8 +129,6 @@ export default function Viewer() {
 	};
 
 	const handleKeyControls = async (e) => {
-		console.log(e.key);
-
 		if (!["ArrowRight", "ArrowLeft", "Enter", " "].includes(e.key)) return;
 
 		switch (e.key) {
@@ -152,7 +146,6 @@ export default function Viewer() {
 	};
 
 	const handleVolumeChange = async (newVolume) => {
-		console.log("new volume", newVolume);
 		const vol = Math.max(0, Math.min(100, newVolume));
 		await setProperty("volume", vol);
 		setPlaybackState((prev) => ({ ...prev, volume: vol }));
@@ -164,7 +157,6 @@ export default function Viewer() {
 		const initMpv = async () => {
 			try {
 				await init(mpvConfig);
-				console.log("mpv initialization completed successfully!");
 
 				// Optional: Listen to MPV events (e.g., to update a custom seek bar)
 				unlisten = await observeProperties(
@@ -184,8 +176,6 @@ export default function Viewer() {
 								duration: name === "duration" ? data : prev.duration,
 							};
 						});
-						// You can update local state here if you want to build a custom UI
-						// console.log(name, data);
 					},
 				);
 			} catch (error) {
