@@ -72,7 +72,7 @@ CI runs all of these on every push to `main` and every pull request; the Rust ch
 
 ## Releasing
 
-1. Bump the version in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `package.json`.
+1. Bump the version in `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml`, and `package.json`, and add a section to [CHANGELOG.md](CHANGELOG.md).
 2. Commit, then tag and push: `git tag v1.2.0 && git push origin v1.2.0`.
 3. The [Release workflow](.github/workflows/release.yml) builds Windows, Linux (`.deb`, `.rpm`), and macOS (Apple Silicon and Intel) installers into a **draft** GitHub release.
 4. Review the draft and publish it.
