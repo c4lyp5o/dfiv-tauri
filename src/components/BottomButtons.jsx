@@ -1,35 +1,42 @@
-import { useDFMVContext } from "../context/DFMVContext";
+import { Settings as SettingsIcon } from "lucide-react";
+
+import { useDBContext, useDFMVContext } from "../context/DFMVContext";
 
 export default function BottomButtons() {
-	const { dfmvDispatch } = useDFMVContext();
+	const { dfmvState, dfmvDispatch } = useDFMVContext();
+	const { dbState } = useDBContext();
+
+	const isImporting = dbState.status === "Importing";
 
 	return (
-		// biome-ignore lint/a11y/noStaticElementInteractions: false
-		// biome-ignore lint/a11y/useKeyWithClickEvents: false
-		<section
-			onClick={() => dfmvDispatch({ type: "TOGGLE_SETTINGS" })}
-			className="w-64 h-8 bg-neutral-300 flex items-center justify-center gap-2 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-40"
-		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				className="h-5 w-5"
-				fill="none"
-				viewBox="0 0 24 24"
-				stroke="currentColor"
-				strokeWidth={2}
+		<footer className="border-t border-line p-2">
+			{isImporting && (
+				<div className="mb-2 px-1" role="status">
+					<div className="mb-1 flex justify-between text-[11px] text-fg-muted">
+						<span>Importing to library…</span>
+						<span className="tabular-nums">{dbState.progress}%</span>
+					</div>
+					<div className="h-1 overflow-hidden rounded-full bg-surface-3">
+						<div
+							className="h-full rounded-full bg-accent transition-all duration-300"
+							style={{ width: `${dbState.progress}%` }}
+						/>
+					</div>
+				</div>
+			)}
+			<button
+				type="button"
+				aria-pressed={dfmvState.showSettings}
+				onClick={() => dfmvDispatch({ type: "TOGGLE_SETTINGS" })}
+				className={`flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-[13px] transition-colors ${
+					dfmvState.showSettings
+						? "bg-surface-3 text-fg"
+						: "text-fg-muted hover:bg-surface-3 hover:text-fg"
+				}`}
 			>
-				<title>Settings</title>
-				<path
-					strokeLinecap="round"
-					strokeLinejoin="round"
-					d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.591 1.048c1.518-.878 3.304.908 2.426 2.426a1.724 1.724 0 001.048 2.591c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.048 2.591c.878 1.518-.908 3.304-2.426 2.426a1.724 1.724 0 00-2.591 1.048c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.591-1.048c-1.518.878-3.304-.908-2.426-2.426a1.724 1.724 0 00-1.048-2.591c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.048-2.591c-.878-1.518.908-3.304 2.426-2.426.957.554 2.165.21 2.591-1.048z"
-				/>
-				<path
-					strokeLinecap="round"
-					strokeLinejoin="round"
-					d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-				/>
-			</svg>
-		</section>
+				<SettingsIcon size={15} />
+				Settings
+			</button>
+		</footer>
 	);
 }

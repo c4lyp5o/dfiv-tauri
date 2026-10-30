@@ -3,7 +3,7 @@
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
-use sqlx::SqlitePool;
+use sqlx::{AssertSqlSafe, SqlitePool};
 use sqlx::sqlite::{SqliteConnectOptions, SqlitePoolOptions};
 use tauri::{AppHandle, Manager, Emitter};
 use walkdir::WalkDir;
@@ -383,7 +383,8 @@ async fn get_media_stats(db: tauri::State<'_, DbPool>) -> Result<MediaStats, Str
         sql_list(AUDIO_TYPES),
         sql_list(VIDEO_TYPES),
     );
-    let row = sqlx::query(&sql)
+    // Only the constant type lists are interpolated
+    let row = sqlx::query(AssertSqlSafe(sql))
         .fetch_one(&db.0)
         .await
         .map_err(|e| e.to_string())?;
@@ -420,7 +421,8 @@ async fn search(pool: &SqlitePool, query: &str, types: &[String]) -> Result<Vec<
         placeholders
     );
 
-    let mut q = sqlx::query_as::<_, MediaEntry>(&sql);
+    // Only `?` placeholders are interpolated; all values are bound
+    let mut q = sqlx::query_as::<_, MediaEntry>(AssertSqlSafe(sql));
     for t in types {
         q = q.bind(t);
     }
@@ -446,7 +448,8 @@ async fn get_media_by_type(
         placeholders
     );
 
-    let mut q = sqlx::query_as::<_, MediaEntry>(&sql);
+    // Only `?` placeholders are interpolated; all values are bound
+    let mut q = sqlx::query_as::<_, MediaEntry>(AssertSqlSafe(sql));
     for t in &types {
         q = q.bind(t);
     }

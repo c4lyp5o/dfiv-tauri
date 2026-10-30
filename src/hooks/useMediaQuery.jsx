@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
-import useSWR from "swr";
+import { useCallback } from "react";
+import useSWR, { useSWRConfig } from "swr";
 
 export function useMediaStats() {
 	return useSWR("media-stats", () => invoke("get_media_stats"), {
@@ -21,5 +22,19 @@ export function useMediaSearch(types, query, enabled = true) {
 		enabled && query ? ["media-search", query, ...types] : null,
 		() => invoke("search_media", { query, types }),
 		{ dedupingInterval: 300 },
+	);
+}
+
+/** Revalidates every library query (lists, searches and stats) after a change. */
+export function useRevalidateMedia() {
+	const { mutate } = useSWRConfig();
+	return useCallback(
+		() =>
+			mutate(
+				(key) =>
+					key === "media-stats" ||
+					(Array.isArray(key) && key[0]?.startsWith?.("media-")),
+			),
+		[mutate],
 	);
 }
