@@ -66,7 +66,8 @@ jobs:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
           releaseName: Damn Fast Media Viewer ${{ github.ref_type == 'tag' && github.ref_name || 'v__VERSION__' }}
           releaseBody: |
-            See the README for platform requirements. macOS and Linux need libmpv installed
-            (`brew install mpv` / `sudo apt install libmpv2`). Builds are unsigned.
+            See [CHANGELOG.md](https://github.com/${{ github.repository }}/blob/main/CHANGELOG.md) for what's new
+            and the [README](https://github.com/${{ github.repository }}#install) for platform requirements.
+            macOS and Linux need libmpv installed (`brew install mpv` / `sudo apt install libmpv2`). Builds are unsigned.
           releaseDraft: true
           prerelease: false
