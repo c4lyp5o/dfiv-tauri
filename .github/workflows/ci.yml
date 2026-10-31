@@ -37,6 +37,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
+      # macOS/Linux bundle configs reference the wrapper by name, so it must exist to build
+      - name: Fetch libmpv-wrapper
+        if: runner.os != 'Windows'
+        run: bash scripts/fetch-libmpv-wrapper.sh
+
       - uses: oven-sh/setup-bun@v2
       # generate_context! needs the built frontend in dist/
       - run: bun install --frozen-lockfile
